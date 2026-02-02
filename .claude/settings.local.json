@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\globo\\\\Desktop\\\\Dreams && npm run tauri build 2>&1\")",
+      "Bash(python3:*)"
     ]
   }
 }

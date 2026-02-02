@@ -16,7 +16,7 @@ interface DreamState {
   deleteDream: (id: string) => Promise<void>;
 }
 
-export const useDreamStore = create<DreamState>((set, get) => ({
+export const useDreamStore = create<DreamState>((set) => ({
   dreams: [],
   selectedDream: null,
   isLoading: false,

@@ -21,7 +21,7 @@ export function GraphView() {
   const { tags, fetchTags } = useTagStore();
   const { openEditor } = useUIStore();
   const [filter, setFilter] = useState<FilterMode>('all');
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [, setSelectedNode] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDreams();
@@ -90,7 +90,7 @@ export function GraphView() {
         for (let j = i + 1; j < dreamTags.length; j++) {
           const tag1 = dreamTags[i].id;
           const tag2 = dreamTags[j].id;
-          const key = [tag1, tag2].sort().join('-');
+          // Track co-occurrence between tags
 
           const map1 = tagCoOccurrence.get(tag1)!;
           map1.set(tag2, (map1.get(tag2) || 0) + 1);

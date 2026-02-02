@@ -40,8 +40,7 @@ export function CalendarView() {
     openEditor(info.event.id);
   };
 
-  const handleDateClick = (info: { dateStr: string }) => {
-    // Could pre-fill the date when creating new dream
+  const handleDateClick = () => {
     openEditor();
   };
 

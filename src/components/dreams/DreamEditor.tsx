@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -8,7 +8,6 @@ import {
   Italic,
   List,
   ListOrdered,
-  LinkIcon,
   Heading1,
   Heading2,
   Undo,
@@ -33,7 +32,7 @@ import { TagPicker } from '@/components/tags/TagPicker';
 import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
-import type { Tag, Dream } from '@/lib/tauri';
+import type { Tag } from '@/lib/tauri';
 
 export function DreamEditor() {
   const { editorOpen, editingDreamId, closeEditor } = useUIStore();

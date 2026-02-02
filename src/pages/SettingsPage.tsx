@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { FolderOpen, Upload, Check, ExternalLink } from 'lucide-react';
+import { FolderOpen, Upload, Check } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { exportToObsidian, getObsidianPath } from '@/lib/tauri';
+import { exportToObsidian } from '@/lib/tauri';
 
 export function SettingsPage() {
   const [isExporting, setIsExporting] = useState(false);

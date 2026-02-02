@@ -13,13 +13,6 @@ import { truncateText } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
 import { useDreamStore } from '@/stores/dreamStore';
 import type { Dream } from '@/lib/tauri';
-import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-
-// Inline dropdown menu components
-const DropdownMenuRoot = DropdownMenuPrimitive.Root;
-const DropdownMenuTriggerPrimitive = DropdownMenuPrimitive.Trigger;
-const DropdownMenuContentPrimitive = DropdownMenuPrimitive.Content;
-const DropdownMenuItemPrimitive = DropdownMenuPrimitive.Item;
 
 interface DreamCardProps {
   dream: Dream;
@@ -53,8 +46,8 @@ export function DreamCard({ dream }: DreamCardProps) {
             </p>
           </div>
 
-          <DropdownMenuRoot>
-            <DropdownMenuTriggerPrimitive asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
@@ -63,33 +56,29 @@ export function DreamCard({ dream }: DreamCardProps) {
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
-            </DropdownMenuTriggerPrimitive>
-            <DropdownMenuContentPrimitive
-              className="z-50 min-w-[8rem] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-              align="end"
-            >
-              <DropdownMenuItemPrimitive
-                className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer rounded-sm hover:bg-accent focus:bg-accent outline-none"
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
                   handleEdit();
                 }}
               >
-                <Pencil className="h-4 w-4" />
+                <Pencil className="h-4 w-4 mr-2" />
                 Edit
-              </DropdownMenuItemPrimitive>
-              <DropdownMenuItemPrimitive
-                className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer rounded-sm hover:bg-accent focus:bg-accent outline-none text-destructive"
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDelete();
                 }}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4 mr-2" />
                 Delete
-              </DropdownMenuItemPrimitive>
-            </DropdownMenuContentPrimitive>
-          </DropdownMenuRoot>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
 
