@@ -1,4 +1,4 @@
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/uiStore';
 
@@ -12,7 +12,7 @@ const viewTitles: Record<string, string> = {
 };
 
 export function Header() {
-  const { currentView, openSearch, openEditor } = useUIStore();
+  const { currentView, openSearch, openEditor, openHandwritingUpload } = useUIStore();
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-card px-6">
@@ -28,10 +28,21 @@ export function Header() {
         </Button>
 
         {currentView === 'journal' && (
-          <Button size="sm" className="gap-2" onClick={() => openEditor()}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">New Dream</span>
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={openHandwritingUpload}
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">Scan Handwriting</span>
+            </Button>
+            <Button size="sm" className="gap-2" onClick={() => openEditor()}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">New Dream</span>
+            </Button>
+          </>
         )}
       </div>
     </header>
