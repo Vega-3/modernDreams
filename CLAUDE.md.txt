@@ -2,7 +2,7 @@ Project information
 
 See the README.md file for a project overview.
 
-NEVER write any .md files except fro README.md
+NEVER write any .md files except for README.md
 Build and Test Commands
 
     Install: just install or pip install -e ".[dev]"
