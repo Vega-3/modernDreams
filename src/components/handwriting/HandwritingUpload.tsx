@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Upload, Image, X, FileText, Loader2 } from 'lucide-react';
-import { createWorker, Worker } from 'tesseract.js';
+import { recognizeHandwriting } from '@/lib/tauri';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,6 +28,19 @@ interface HandwritingUploadProps {
   onImagesProcessed: (results: { text: string; imagePreview: string }[]) => void;
 }
 
+/** Convert a File to a plain base64 string (no data-URL prefix). */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      resolve(dataUrl.split(',')[1]);
+    };
+    reader.onerror = reject;
+  });
+}
+
 export function HandwritingUpload({ open, onClose, onImagesProcessed }: HandwritingUploadProps) {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -48,18 +61,13 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
-    const files = Array.from(e.dataTransfer.files).filter((file) =>
-      file.type.startsWith('image/')
-    );
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
     addFiles(files);
   }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const files = Array.from(e.target.files).filter((file) =>
-        file.type.startsWith('image/')
-      );
+      const files = Array.from(e.target.files).filter((f) => f.type.startsWith('image/'));
       addFiles(files);
     }
   };
@@ -77,50 +85,8 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
   const removeImage = (id: string) => {
     setImages((prev) => {
       const image = prev.find((img) => img.id === id);
-      if (image) {
-        URL.revokeObjectURL(image.preview);
-      }
+      if (image) URL.revokeObjectURL(image.preview);
       return prev.filter((img) => img.id !== id);
-    });
-  };
-
-  const preprocessImage = async (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      const img = new window.Image();
-
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-
-        // Draw original image
-        ctx.drawImage(img, 0, 0);
-
-        // Get image data
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-
-        // Convert to grayscale and apply threshold (similar to OpenCV preprocessing)
-        for (let i = 0; i < data.length; i += 4) {
-          // Grayscale conversion
-          const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-
-          // Threshold (invert for better OCR on dark text)
-          const threshold = 150;
-          const value = gray < threshold ? 0 : 255;
-
-          data[i] = value;     // R
-          data[i + 1] = value; // G
-          data[i + 2] = value; // B
-          // Alpha stays the same
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-        resolve(canvas.toDataURL('image/png'));
-      };
-
-      img.src = URL.createObjectURL(file);
     });
   };
 
@@ -130,75 +96,50 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
     setIsProcessing(true);
     setProcessingProgress(0);
 
-    let worker: Worker | null = null;
+    const total = images.length;
+    const updatedImages = [...images];
 
-    try {
-      // Create Tesseract worker
-      worker = await createWorker('eng', 1, {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            // Update progress for current image
-          }
-        },
-      });
+    for (let i = 0; i < total; i++) {
+      const image = updatedImages[i];
 
-      const totalImages = images.length;
-      const updatedImages = [...images];
+      updatedImages[i] = { ...image, status: 'processing' };
+      setImages([...updatedImages]);
 
-      for (let i = 0; i < totalImages; i++) {
-        const image = updatedImages[i];
+      try {
+        const base64 = await fileToBase64(image.file);
+        const text = await recognizeHandwriting(base64);
 
-        // Update status to processing
-        updatedImages[i] = { ...image, status: 'processing' };
-        setImages([...updatedImages]);
-
-        try {
-          // Preprocess the image
-          const processedDataUrl = await preprocessImage(image.file);
-
-          // Recognize text
-          const { data: { text } } = await worker.recognize(processedDataUrl);
-
-          updatedImages[i] = {
-            ...image,
-            status: 'done',
-            recognizedText: text.trim(),
-          };
-        } catch (error) {
-          updatedImages[i] = {
-            ...image,
-            status: 'error',
-            error: String(error),
-          };
-        }
-
-        setImages([...updatedImages]);
-        setProcessingProgress(((i + 1) / totalImages) * 100);
+        updatedImages[i] = {
+          ...image,
+          status: 'done',
+          recognizedText: text.trim(),
+        };
+      } catch (error) {
+        updatedImages[i] = {
+          ...image,
+          status: 'error',
+          error: String(error),
+        };
       }
 
-      // All done - pass results to parent
-      const successfulResults = updatedImages
-        .filter((img) => img.status === 'done' && img.recognizedText)
-        .map((img) => ({
-          text: img.recognizedText!,
-          imagePreview: img.preview,
-        }));
-
-      if (successfulResults.length > 0) {
-        onImagesProcessed(successfulResults);
-      }
-    } catch (error) {
-      console.error('OCR Error:', error);
-    } finally {
-      if (worker) {
-        await worker.terminate();
-      }
-      setIsProcessing(false);
+      setImages([...updatedImages]);
+      setProcessingProgress(((i + 1) / total) * 100);
     }
+
+    const successfulResults = updatedImages
+      .filter((img) => img.status === 'done' && img.recognizedText)
+      .map((img) => ({
+        text: img.recognizedText!,
+        imagePreview: img.preview,
+      }));
+
+    // Always call the callback so the preview dialog opens (even if some images failed)
+    onImagesProcessed(successfulResults.length > 0 ? successfulResults : []);
+
+    setIsProcessing(false);
   };
 
   const handleClose = () => {
-    // Clean up previews
     images.forEach((img) => URL.revokeObjectURL(img.preview));
     setImages([]);
     setProcessingProgress(0);
@@ -214,7 +155,8 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
             Upload Handwritten Dreams
           </DialogTitle>
           <DialogDescription>
-            Upload images of handwritten dream entries. The text will be recognized and you can review it before saving.
+            Upload images of handwritten dream entries. Text is recognised using the Windows OCR
+            engine, then you can review and edit before saving.
           </DialogDescription>
         </DialogHeader>
 
@@ -278,7 +220,9 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
                         <span className="text-xs text-green-400">Done</span>
                       )}
                       {image.status === 'error' && (
-                        <span className="text-xs text-red-400">Error</span>
+                        <span className="text-xs text-red-400" title={image.error}>
+                          Error
+                        </span>
                       )}
                     </div>
 
@@ -297,11 +241,25 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
             </ScrollArea>
           )}
 
+          {/* Per-image errors */}
+          {images.some((img) => img.status === 'error') && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+              {images
+                .filter((img) => img.status === 'error')
+                .map((img) => (
+                  <p key={img.id}>
+                    <span className="font-medium">{img.file.name}:</span>{' '}
+                    {img.error ?? 'Unknown error'}
+                  </p>
+                ))}
+            </div>
+          )}
+
           {/* Progress bar */}
           {isProcessing && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Processing images...</span>
+                <span>Recognising text…</span>
                 <span>{Math.round(processingProgress)}%</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -325,12 +283,12 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
             {isProcessing ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Processing...
+                Processing…
               </>
             ) : (
               <>
                 <Image className="h-4 w-4 mr-2" />
-                Recognize Text ({images.length})
+                Recognise Text ({images.length})
               </>
             )}
           </Button>

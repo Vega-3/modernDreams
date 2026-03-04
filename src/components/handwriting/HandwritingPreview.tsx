@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Check, ChevronLeft, ChevronRight, Save, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -40,36 +40,46 @@ interface DreamFormData {
   tags: Tag[];
 }
 
+function generateTitle(text: string): string {
+  const firstLine = text.split('\n')[0].trim();
+  if (firstLine.length <= 50) {
+    return firstLine || 'Untitled Dream';
+  }
+  return firstLine.substring(0, 47) + '...';
+}
+
+function buildFormData(dreams: RecognizedDream[]): DreamFormData[] {
+  return dreams.map((dream) => ({
+    title: generateTitle(dream.text),
+    content: dream.text,
+    dreamDate: format(new Date(), 'yyyy-MM-dd'),
+    isLucid: false,
+    moodRating: null,
+    clarityRating: null,
+    tags: [],
+  }));
+}
+
 export function HandwritingPreview({ open, onClose, recognizedDreams }: HandwritingPreviewProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [formData, setFormData] = useState<DreamFormData[]>(() =>
-    recognizedDreams.map((dream) => ({
-      title: generateTitle(dream.text),
-      content: dream.text,
-      dreamDate: format(new Date(), 'yyyy-MM-dd'),
-      isLucid: false,
-      moodRating: null,
-      clarityRating: null,
-      tags: [],
-    }))
-  );
+  const [formData, setFormData] = useState<DreamFormData[]>(() => buildFormData(recognizedDreams));
   const [savedCount, setSavedCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   const { createDream } = useDreamStore();
 
+  // Reinitialise state whenever the dialog opens with a fresh set of recognised dreams
+  useEffect(() => {
+    if (open && recognizedDreams.length > 0) {
+      setFormData(buildFormData(recognizedDreams));
+      setCurrentIndex(0);
+      setSavedCount(0);
+    }
+  }, [open, recognizedDreams]);
+
   const currentDream = recognizedDreams[currentIndex];
   const currentForm = formData[currentIndex];
   const totalDreams = recognizedDreams.length;
-
-  function generateTitle(text: string): string {
-    // Generate a title from the first line or first few words
-    const firstLine = text.split('\n')[0].trim();
-    if (firstLine.length <= 50) {
-      return firstLine || 'Untitled Dream';
-    }
-    return firstLine.substring(0, 47) + '...';
-  }
 
   const updateCurrentForm = (updates: Partial<DreamFormData>) => {
     setFormData((prev) => {

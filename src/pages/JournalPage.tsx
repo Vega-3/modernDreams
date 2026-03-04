@@ -19,6 +19,11 @@ export function JournalPage() {
   const { fetchDreams } = useDreamStore();
 
   const handleImagesProcessed = (results: { text: string; imagePreview: string }[]) => {
+    if (results.length === 0) {
+      // All images failed — just close the upload dialog; errors are shown there.
+      closeHandwritingUpload();
+      return;
+    }
     setRecognizedDreams(results);
     closeHandwritingUpload();
     openHandwritingPreview();

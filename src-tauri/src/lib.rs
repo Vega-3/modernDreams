@@ -28,6 +28,7 @@ pub fn run() {
             commands::search::search_dreams,
             commands::obsidian::export_to_obsidian,
             commands::obsidian::get_obsidian_path,
+            commands::ocr::recognize_handwriting,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

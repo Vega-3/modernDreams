@@ -89,3 +89,7 @@ export const searchDreams = (query: SearchQuery) => invoke<SearchResult>('search
 // Obsidian commands
 export const exportToObsidian = () => invoke<ExportResult>('export_to_obsidian');
 export const getObsidianPath = () => invoke<string>('get_obsidian_path');
+
+// OCR commands
+export const recognizeHandwriting = (imageBase64: string) =>
+  invoke<string>('recognize_handwriting', { imageBase64 });
