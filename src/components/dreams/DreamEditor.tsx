@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
 import {
   Bold,
   Italic,
@@ -15,6 +16,7 @@ import {
   Sparkles,
   SpellCheck,
   Wand2,
+  ImagePlus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -82,6 +84,7 @@ export function DreamEditor() {
   const allTags = useTagStore((state) => state.tags);
 
   const [title, setTitle] = useState('');
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [dreamDate, setDreamDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isLucid, setIsLucid] = useState(false);
   const [moodRating, setMoodRating] = useState<number | null>(null);
@@ -99,6 +102,10 @@ export function DreamEditor() {
       }),
       Placeholder.configure({
         placeholder: 'Describe your dream...',
+      }),
+      Image.configure({
+        inline: false,
+        allowBase64: true,
       }),
     ],
     content: '',
@@ -168,6 +175,18 @@ export function DreamEditor() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editor) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      editor.chain().focus().setImage({ src }).run();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleAutoMatchTags = () => {
@@ -324,6 +343,20 @@ export function DreamEditor() {
                 <ToolbarButton onClick={() => editor?.chain().focus().redo().run()}>
                   <Redo className="h-4 w-4" />
                 </ToolbarButton>
+                <Separator orientation="vertical" className="h-6 mx-1" />
+                <ToolbarButton
+                  onClick={() => imageInputRef.current?.click()}
+                  isActive={false}
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </ToolbarButton>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageFile}
+                />
               </div>
               <div className="p-4">
                 <EditorContent editor={editor} />
