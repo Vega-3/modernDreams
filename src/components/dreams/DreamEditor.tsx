@@ -13,6 +13,7 @@ import {
   Undo,
   Redo,
   Sparkles,
+  SpellCheck,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,45 @@ import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { Tag } from '@/lib/tauri';
+
+// Grammar fixes applied only to text nodes between HTML tags.
+// Only unambiguous single-solution corrections are applied.
+function applyGrammarFixes(html: string): string {
+  return html.replace(/>([^<]+)</g, (_, text: string) => {
+    let t = text;
+    // Collapse multiple spaces
+    t = t.replace(/  +/g, ' ');
+    // Standalone lowercase "i" → "I"
+    t = t.replace(/\bi\b/g, 'I');
+    // Common contractions missing apostrophes
+    const contractions: [RegExp, string][] = [
+      [/\bdont\b/gi, "don't"],
+      [/\bcant\b/gi, "can't"],
+      [/\bwont\b/gi, "won't"],
+      [/\bdidnt\b/gi, "didn't"],
+      [/\bdoesnt\b/gi, "doesn't"],
+      [/\bisnt\b/gi, "isn't"],
+      [/\bwasnt\b/gi, "wasn't"],
+      [/\bwerent\b/gi, "weren't"],
+      [/\bwouldnt\b/gi, "wouldn't"],
+      [/\bcouldnt\b/gi, "couldn't"],
+      [/\bshouldnt\b/gi, "shouldn't"],
+      [/\bhavent\b/gi, "haven't"],
+      [/\bhasnt\b/gi, "hasn't"],
+      [/\bhadnt\b/gi, "hadn't"],
+    ];
+    for (const [pattern, replacement] of contractions) {
+      t = t.replace(pattern, replacement);
+    }
+    // Capitalise first letter after sentence-ending punctuation
+    t = t.replace(/([.!?]\s+)([a-z])/g, (_, punct, letter) => punct + letter.toUpperCase());
+    // Capitalise the very first character of the text node
+    if (t.length > 0 && /[a-z]/.test(t[0])) {
+      t = t[0].toUpperCase() + t.slice(1);
+    }
+    return '>' + t + '<';
+  });
+}
 
 export function DreamEditor() {
   const { editorOpen, editingDreamId, closeEditor } = useUIStore();
@@ -77,7 +117,6 @@ export function DreamEditor() {
       setSelectedTags(editingDream.tags);
       editor.commands.setContent(editingDream.content_html);
     } else if (!editingDreamId && editor) {
-      // Reset form for new dream
       setTitle('');
       setDreamDate(format(new Date(), 'yyyy-MM-dd'));
       setIsLucid(false);
@@ -126,6 +165,12 @@ export function DreamEditor() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleGrammarFix = () => {
+    if (!editor) return;
+    const fixed = applyGrammarFixes(editor.getHTML());
+    editor.commands.setContent(fixed, false);
   };
 
   const ToolbarButton = ({
@@ -200,7 +245,11 @@ export function DreamEditor() {
           <div className="space-y-2">
             <Label>Content</Label>
             <div className="border rounded-lg">
-              <div className="flex items-center gap-1 p-2 border-b bg-muted/50">
+              <div className="flex items-center gap-1 p-2 border-b bg-muted/50 flex-wrap">
+                <ToolbarButton onClick={handleGrammarFix} isActive={false}>
+                  <SpellCheck className="h-4 w-4" />
+                </ToolbarButton>
+                <Separator orientation="vertical" className="h-6 mx-1" />
                 <ToolbarButton
                   onClick={() => editor?.chain().focus().toggleBold().run()}
                   isActive={editor?.isActive('bold')}
