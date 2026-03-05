@@ -6,6 +6,7 @@ import { CalendarPage } from '@/pages/CalendarPage';
 import { GraphPage } from '@/pages/GraphPage';
 import { TagsPage } from '@/pages/TagsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { GuidePage } from '@/pages/GuidePage';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
 
@@ -30,6 +31,8 @@ function App() {
         return <TagsPage />;
       case 'settings':
         return <SettingsPage />;
+      case 'guide':
+        return <GuidePage />;
       default:
         return <JournalPage />;
     }

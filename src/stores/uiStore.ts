@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type View = 'dashboard' | 'journal' | 'calendar' | 'graph' | 'tags' | 'settings';
+type View = 'dashboard' | 'journal' | 'calendar' | 'graph' | 'tags' | 'settings' | 'guide';
 
 interface RecognizedDream {
   text: string;

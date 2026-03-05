@@ -7,7 +7,8 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Desktop Framework**: Tauri 2.0
 - **Frontend**: React 18 + TypeScript + Vite
 - **Database**: SQLite + FTS5 (full-text search)
-- **Rich Text Editor**: TipTap
+- **Rich Text Editor**: TipTap (with image support)
+- **OCR**: Windows.Media.Ocr (native Windows handwriting recognition)
 - **Graph Visualization**: Cytoscape.js
 - **Calendar**: FullCalendar
 - **UI Components**: shadcn/ui + Tailwind CSS
@@ -21,6 +22,11 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Graph View**: Network visualization of dream-tag relationships
 - **Full-text Search**: Quick search across all dreams (Ctrl+K)
 - **Obsidian Export**: Export to Obsidian vault with wikilinks and Dataview support
+- **Handwriting Scan**: Import handwritten dream notes via the Windows OCR engine (Windows 10/11)
+- **Grammar Fix**: One-click toolbar button that corrects common grammar issues (contractions, capitalisation, double spaces)
+- **Auto-match Tags**: Scans the dream text and automatically applies any tags whose name appears in the content
+- **Inline Images**: Attach and embed images directly into dream entries via the toolbar
+- **Guide**: A built-in guide page that loads `public/GUIDE.md` — edit that file to document your own journalling workflow
 
 ## Prerequisites
 
@@ -73,6 +79,15 @@ dreams/
 ├── package.json
 └── tailwind.config.js
 ```
+
+## Guide
+
+The **Guide** page (sidebar → Guide) displays `public/GUIDE.md`. Edit that file with your own notes on:
+
+- How to record dreams effectively
+- Your personal tagging conventions
+- Tips for using the handwriting scanner
+- Any other workflow notes
 
 ## Keyboard Shortcuts
 

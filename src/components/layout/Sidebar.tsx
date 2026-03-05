@@ -1,4 +1,4 @@
-import { Moon, BookOpen, Calendar, Network, Tags, Settings, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Moon, BookOpen, Calendar, Network, Tags, Settings, PanelLeftClose, PanelLeft, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,7 @@ const navItems = [
   { id: 'graph' as const, icon: Network, label: 'Graph' },
   { id: 'tags' as const, icon: Tags, label: 'Tags' },
   { id: 'settings' as const, icon: Settings, label: 'Settings' },
+  { id: 'guide' as const, icon: HelpCircle, label: 'Guide' },
 ];
 
 export function Sidebar() {

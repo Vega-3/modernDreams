@@ -30,6 +30,7 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
+    "@tiptap/extension-image": "^3.20.0",
     "@tiptap/extension-link": "^2.1.13",
     "@tiptap/extension-mention": "^2.1.13",
     "@tiptap/extension-placeholder": "^2.1.13",
@@ -46,11 +47,13 @@
     "react": "^18.2.0",
     "react-day-picker": "^8.10.0",
     "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.22.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
-    "uuid": "^9.0.1",
     "tesseract.js": "^5.0.4",
+    "uuid": "^9.0.1",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
