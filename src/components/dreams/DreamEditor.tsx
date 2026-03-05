@@ -14,6 +14,7 @@ import {
   Redo,
   Sparkles,
   SpellCheck,
+  Wand2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ import { TagPicker } from '@/components/tags/TagPicker';
 import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useTagStore } from '@/stores/tagStore';
 import type { Tag } from '@/lib/tauri';
 
 // Grammar fixes applied only to text nodes between HTML tags.
@@ -77,6 +79,7 @@ function applyGrammarFixes(html: string): string {
 export function DreamEditor() {
   const { editorOpen, editingDreamId, closeEditor } = useUIStore();
   const { dreams, createDream, updateDream } = useDreamStore();
+  const allTags = useTagStore((state) => state.tags);
 
   const [title, setTitle] = useState('');
   const [dreamDate, setDreamDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -167,6 +170,19 @@ export function DreamEditor() {
     }
   };
 
+  const handleAutoMatchTags = () => {
+    if (!editor) return;
+    const text = editor.getText().toLowerCase();
+    const matched = allTags.filter(
+      (tag) =>
+        text.includes(tag.name.toLowerCase()) &&
+        !selectedTags.some((t) => t.id === tag.id)
+    );
+    if (matched.length > 0) {
+      setSelectedTags([...selectedTags, ...matched]);
+    }
+  };
+
   const handleGrammarFix = () => {
     if (!editor) return;
     const fixed = applyGrammarFixes(editor.getHTML());
@@ -237,7 +253,20 @@ export function DreamEditor() {
 
           {/* Tags */}
           <div className="space-y-2">
-            <Label>Tags</Label>
+            <div className="flex items-center justify-between">
+              <Label>Tags</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAutoMatchTags}
+                className="h-7 gap-1.5 text-xs"
+                title="Scan dream text and apply matching tags"
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                Auto-match
+              </Button>
+            </div>
             <TagPicker selectedTags={selectedTags} onTagsChange={setSelectedTags} />
           </div>
 
