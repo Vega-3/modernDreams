@@ -49,6 +49,8 @@ pub struct Tag {
     pub color: String,
     pub description: Option<String>,
     pub usage_count: i32,
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -89,6 +91,8 @@ pub struct CreateTagInput {
     pub category: TagCategory,
     pub color: String,
     pub description: Option<String>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +102,8 @@ pub struct UpdateTagInput {
     pub category: TagCategory,
     pub color: String,
     pub description: Option<String>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

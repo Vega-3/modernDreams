@@ -78,12 +78,17 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   }, [open, recognizedDreams]);
 
   const currentDream = recognizedDreams[currentIndex];
-  const currentForm = formData[currentIndex];
+  // Bug fix: formData is initialised from [] on first mount (recognizedDreams isn't populated
+  // yet). Fall back to building it fresh from recognizedDreams on the first render so the
+  // Dialog can open immediately without waiting for the useEffect to fire.
+  const resolvedFormData =
+    formData.length === recognizedDreams.length ? formData : buildFormData(recognizedDreams);
+  const currentForm = resolvedFormData[currentIndex];
   const totalDreams = recognizedDreams.length;
 
   const updateCurrentForm = (updates: Partial<DreamFormData>) => {
-    setFormData((prev) => {
-      const newData = [...prev];
+    setFormData(() => {
+      const newData = [...resolvedFormData];
       newData[currentIndex] = { ...newData[currentIndex], ...updates };
       return newData;
     });
@@ -102,7 +107,7 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   };
 
   const handleSaveCurrent = async () => {
-    if (!currentForm.title.trim() || !currentForm.content.trim()) return;
+    if (!currentForm || !currentForm.title.trim() || !currentForm.content.trim()) return;
 
     setIsSaving(true);
     try {
@@ -136,8 +141,8 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   const handleSaveAll = async () => {
     setIsSaving(true);
     try {
-      for (let i = 0; i < formData.length; i++) {
-        const form = formData[i];
+      for (let i = 0; i < resolvedFormData.length; i++) {
+        const form = resolvedFormData[i];
         if (!form.title.trim() || !form.content.trim()) continue;
 
         await createDream({
