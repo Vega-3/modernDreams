@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Upload, Image, X, FileText, Loader2 } from 'lucide-react';
 import { recognizeHandwriting } from '@/lib/tauri';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,20 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+
+  // Bug fix: Radix Dialog does NOT call onOpenChange when the `open` prop is changed
+  // programmatically from the parent — only on user-initiated closes (Escape, backdrop).
+  // So we must reset state here instead of relying on handleClose() being called.
+  useEffect(() => {
+    if (!open) {
+      setImages((prev) => {
+        prev.forEach((img) => URL.revokeObjectURL(img.preview));
+        return [];
+      });
+      setProcessingProgress(0);
+      setIsProcessing(false);
+    }
+  }, [open]);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -126,15 +140,16 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
       setProcessingProgress(((i + 1) / total) * 100);
     }
 
+    // Include every image that completed successfully, even if OCR returned no text.
+    // The user can read the original image and type the text themselves in the preview.
     const successfulResults = updatedImages
-      .filter((img) => img.status === 'done' && img.recognizedText)
+      .filter((img) => img.status === 'done')
       .map((img) => ({
-        text: img.recognizedText!,
+        text: img.recognizedText ?? '',
         imagePreview: img.preview,
       }));
 
-    // Always call the callback so the preview dialog opens (even if some images failed)
-    onImagesProcessed(successfulResults.length > 0 ? successfulResults : []);
+    onImagesProcessed(successfulResults);
 
     setIsProcessing(false);
   };
