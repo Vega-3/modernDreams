@@ -23,7 +23,8 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             category TEXT NOT NULL CHECK (category IN ('location', 'person', 'symbolic', 'emotive', 'custom')),
             color TEXT NOT NULL DEFAULT '#6366f1',
             description TEXT,
-            usage_count INTEGER DEFAULT 0
+            usage_count INTEGER DEFAULT 0,
+            aliases TEXT NOT NULL DEFAULT '[]'
         );
 
         CREATE TABLE IF NOT EXISTS dream_tags (
@@ -77,6 +78,13 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         END;
         "#,
     )?;
+
+    // Additive migration: add aliases column to existing databases.
+    // Silently ignored if the column already exists (fresh DB has it from CREATE TABLE).
+    let _ = conn.execute(
+        "ALTER TABLE tags ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
 
     Ok(())
 }

@@ -4,6 +4,18 @@ use rusqlite::{params, OptionalExtension};
 use tauri::State;
 use uuid::Uuid;
 
+// ── Aliases JSON helpers ────────────────────────────────────────────────────
+
+fn parse_aliases(s: &str) -> Vec<String> {
+    serde_json::from_str(s).unwrap_or_default()
+}
+
+fn serialize_aliases(aliases: &[String]) -> String {
+    serde_json::to_string(aliases).unwrap_or_else(|_| "[]".to_string())
+}
+
+// ── Tag commands ────────────────────────────────────────────────────────────
+
 #[tauri::command]
 pub fn get_tags(db: State<'_, DbConnection>) -> Result<Vec<Tag>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
@@ -11,7 +23,7 @@ pub fn get_tags(db: State<'_, DbConnection>) -> Result<Vec<Tag>, String> {
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, name, category, color, description, usage_count
+            SELECT id, name, category, color, description, usage_count, aliases
             FROM tags
             ORDER BY usage_count DESC, name ASC
             "#,
@@ -21,6 +33,7 @@ pub fn get_tags(db: State<'_, DbConnection>) -> Result<Vec<Tag>, String> {
     let tags_iter = stmt
         .query_map([], |row| {
             let category_str: String = row.get(2)?;
+            let aliases_str: String = row.get(6).unwrap_or_else(|_| "[]".to_string());
             Ok(Tag {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -28,6 +41,7 @@ pub fn get_tags(db: State<'_, DbConnection>) -> Result<Vec<Tag>, String> {
                 color: row.get(3)?,
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
+                aliases: parse_aliases(&aliases_str),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -47,7 +61,7 @@ pub fn get_tag(id: String, db: State<'_, DbConnection>) -> Result<Option<Tag>, S
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, name, category, color, description, usage_count
+            SELECT id, name, category, color, description, usage_count, aliases
             FROM tags
             WHERE id = ?1
             "#,
@@ -57,6 +71,7 @@ pub fn get_tag(id: String, db: State<'_, DbConnection>) -> Result<Option<Tag>, S
     let tag_result = stmt
         .query_row(params![id], |row| {
             let category_str: String = row.get(2)?;
+            let aliases_str: String = row.get(6).unwrap_or_else(|_| "[]".to_string());
             Ok(Tag {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -64,6 +79,7 @@ pub fn get_tag(id: String, db: State<'_, DbConnection>) -> Result<Option<Tag>, S
                 color: row.get(3)?,
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
+                aliases: parse_aliases(&aliases_str),
             })
         })
         .optional()
@@ -77,11 +93,12 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbConnection>) -> Result<
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
     let id = Uuid::new_v4().to_string();
+    let aliases_json = serialize_aliases(&input.aliases);
 
     conn.execute(
         r#"
-        INSERT INTO tags (id, name, category, color, description, usage_count)
-        VALUES (?1, ?2, ?3, ?4, ?5, 0)
+        INSERT INTO tags (id, name, category, color, description, usage_count, aliases)
+        VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)
         "#,
         params![
             id,
@@ -89,6 +106,7 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbConnection>) -> Result<
             input.category.as_str(),
             input.color,
             input.description,
+            aliases_json,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -100,6 +118,7 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbConnection>) -> Result<
         color: input.color,
         description: input.description,
         usage_count: 0,
+        aliases: input.aliases,
     })
 }
 
@@ -107,10 +126,12 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbConnection>) -> Result<
 pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<Tag, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
 
+    let aliases_json = serialize_aliases(&input.aliases);
+
     conn.execute(
         r#"
         UPDATE tags
-        SET name = ?2, category = ?3, color = ?4, description = ?5
+        SET name = ?2, category = ?3, color = ?4, description = ?5, aliases = ?6
         WHERE id = ?1
         "#,
         params![
@@ -119,6 +140,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
             input.category.as_str(),
             input.color,
             input.description,
+            aliases_json,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -127,7 +149,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, name, category, color, description, usage_count
+            SELECT id, name, category, color, description, usage_count, aliases
             FROM tags
             WHERE id = ?1
             "#,
@@ -137,6 +159,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
     let tag = stmt
         .query_row(params![input.id], |row| {
             let category_str: String = row.get(2)?;
+            let aliases_str: String = row.get(6).unwrap_or_else(|_| "[]".to_string());
             Ok(Tag {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -144,6 +167,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
                 color: row.get(3)?,
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
+                aliases: parse_aliases(&aliases_str),
             })
         })
         .map_err(|e| e.to_string())?;

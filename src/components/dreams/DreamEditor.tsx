@@ -194,8 +194,11 @@ export function DreamEditor() {
     const text = editor.getText().toLowerCase();
     const matched = allTags.filter(
       (tag) =>
-        text.includes(tag.name.toLowerCase()) &&
-        !selectedTags.some((t) => t.id === tag.id)
+        !selectedTags.some((t) => t.id === tag.id) &&
+        (
+          text.includes(tag.name.toLowerCase()) ||
+          tag.aliases.some((alias) => text.includes(alias.toLowerCase()))
+        )
     );
     if (matched.length > 0) {
       setSelectedTags([...selectedTags, ...matched]);

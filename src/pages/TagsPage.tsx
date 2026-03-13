@@ -32,6 +32,14 @@ const presetColors = [
   '#10b981',
 ];
 
+/** Parse a comma-separated aliases string into a trimmed, non-empty array. */
+function parseAliasesInput(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function TagsPage() {
   const { tags, fetchTags, createTag, updateTag, deleteTag } = useTagStore();
   const [search, setSearch] = useState('');
@@ -42,15 +50,21 @@ export function TagsPage() {
   const [category, setCategory] = useState<TagCategory>('custom');
   const [color, setColor] = useState('#6366f1');
   const [description, setDescription] = useState('');
+  // Comma-separated in the UI; converted to/from string[] on save/load
+  const [aliases, setAliases] = useState('');
 
   useEffect(() => {
     fetchTags();
   }, [fetchTags]);
 
   const filteredTags = tags.filter((tag) => {
-    const matchesSearch = !search || tag.name.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = tag.category === activeCategory;
-    return matchesSearch && matchesCategory;
+    if (tag.category !== activeCategory) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      tag.name.toLowerCase().includes(q) ||
+      tag.aliases.some((a) => a.toLowerCase().includes(q))
+    );
   });
 
   const openEditor = (tag?: Tag) => {
@@ -60,18 +74,22 @@ export function TagsPage() {
       setCategory(tag.category);
       setColor(tag.color);
       setDescription(tag.description || '');
+      setAliases(tag.aliases.join(', '));
     } else {
       setEditingTag(null);
       setName('');
       setCategory(activeCategory);
       setColor(getCategoryColor(activeCategory));
       setDescription('');
+      setAliases('');
     }
     setIsEditorOpen(true);
   };
 
   const handleSave = async () => {
     if (!name.trim()) return;
+
+    const parsedAliases = parseAliasesInput(aliases);
 
     try {
       if (editingTag) {
@@ -81,6 +99,7 @@ export function TagsPage() {
           category,
           color,
           description: description.trim() || null,
+          aliases: parsedAliases,
         });
       } else {
         await createTag({
@@ -88,6 +107,7 @@ export function TagsPage() {
           category,
           color,
           description: description.trim() || null,
+          aliases: parsedAliases,
         });
       }
       setIsEditorOpen(false);
@@ -170,6 +190,12 @@ export function TagsPage() {
                       {tag.description && (
                         <p className="text-sm text-muted-foreground mb-2">{tag.description}</p>
                       )}
+                      {tag.aliases.length > 0 && (
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Also matches:{' '}
+                          <span className="italic">{tag.aliases.join(', ')}</span>
+                        </p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Used in {tag.usage_count} dream{tag.usage_count !== 1 ? 's' : ''}
                       </p>
@@ -245,6 +271,20 @@ export function TagsPage() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What does this tag represent?"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tag-aliases">Alternative words (optional)</Label>
+              <Input
+                id="tag-aliases"
+                value={aliases}
+                onChange={(e) => setAliases(e.target.value)}
+                placeholder="e.g. flying, levitate, hover"
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated. The auto-match button in the dream editor will apply this tag when
+                any of these words appear in the dream text.
+              </p>
             </div>
           </div>
 
