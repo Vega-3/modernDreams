@@ -4,15 +4,28 @@ import fcose from 'cytoscape-fcose';
 import { ZoomIn, ZoomOut, Maximize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useUIStore } from '@/stores/uiStore';
 import { getCategoryColor } from '@/lib/utils';
+import { GraphStats } from './GraphStats';
 
 cytoscape.use(fcose);
 
 type FilterMode = 'all' | 'location' | 'person' | 'symbolic' | 'emotive' | 'custom';
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function oneYearAgo(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString().slice(0, 10);
+}
 
 export function GraphView() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,18 +36,20 @@ export function GraphView() {
   const [filter, setFilter] = useState<FilterMode>('all');
   const [, setSelectedNode] = useState<string | null>(null);
 
+  // Date range for the graph analysis panel
+  const [startDate, setStartDate] = useState<string>(oneYearAgo());
+  const [endDate, setEndDate] = useState<string>(today());
+
   useEffect(() => {
     fetchDreams();
     fetchTags();
   }, [fetchDreams, fetchTags]);
 
-  // Build graph data
   const elements = useMemo(() => {
     const nodes: ElementDefinition[] = [];
     const edges: ElementDefinition[] = [];
     const tagCoOccurrence: Map<string, Map<string, number>> = new Map();
 
-    // Add tag nodes
     const filteredTags = filter === 'all' ? tags : tags.filter((t) => t.category === filter);
 
     filteredTags.forEach((tag) => {
@@ -50,12 +65,10 @@ export function GraphView() {
       });
     });
 
-    // Add dream nodes and edges
     dreams.forEach((dream) => {
       const dreamTags = dream.tags.filter(
         (t) => filter === 'all' || t.category === filter
       );
-
       if (dreamTags.length === 0) return;
 
       nodes.push({
@@ -68,7 +81,6 @@ export function GraphView() {
         },
       });
 
-      // Add edges from dream to tags
       dreamTags.forEach((tag) => {
         edges.push({
           data: {
@@ -78,33 +90,21 @@ export function GraphView() {
             type: 'dream-tag',
           },
         });
-
-        // Track co-occurrence
-        if (!tagCoOccurrence.has(tag.id)) {
-          tagCoOccurrence.set(tag.id, new Map());
-        }
+        if (!tagCoOccurrence.has(tag.id)) tagCoOccurrence.set(tag.id, new Map());
       });
 
-      // Calculate tag co-occurrence
       for (let i = 0; i < dreamTags.length; i++) {
         for (let j = i + 1; j < dreamTags.length; j++) {
           const tag1 = dreamTags[i].id;
           const tag2 = dreamTags[j].id;
-          // Track co-occurrence between tags
-
           const map1 = tagCoOccurrence.get(tag1)!;
           map1.set(tag2, (map1.get(tag2) || 0) + 1);
-
-          if (!tagCoOccurrence.has(tag2)) {
-            tagCoOccurrence.set(tag2, new Map());
-          }
-          const map2 = tagCoOccurrence.get(tag2)!;
-          map2.set(tag1, (map2.get(tag1) || 0) + 1);
+          if (!tagCoOccurrence.has(tag2)) tagCoOccurrence.set(tag2, new Map());
+          tagCoOccurrence.get(tag2)!.set(tag1, (tagCoOccurrence.get(tag2)!.get(tag1) || 0) + 1);
         }
       }
     });
 
-    // Add tag-to-tag edges based on co-occurrence
     const addedEdges = new Set<string>();
     tagCoOccurrence.forEach((coTags, tagId) => {
       coTags.forEach((count, coTagId) => {
@@ -127,7 +127,6 @@ export function GraphView() {
     return [...nodes, ...edges];
   }, [dreams, tags, filter]);
 
-  // Initialize cytoscape
   useEffect(() => {
     if (!containerRef.current || elements.length === 0) return;
 
@@ -151,28 +150,15 @@ export function GraphView() {
         },
         {
           selector: 'node[type="dream"]',
-          style: {
-            shape: 'ellipse',
-            'border-width': 2,
-            'border-color': '#3f3f50',
-          },
+          style: { shape: 'ellipse', 'border-width': 2, 'border-color': '#3f3f50' },
         },
         {
           selector: 'node[type="tag"]',
-          style: {
-            shape: 'round-rectangle',
-            'border-width': 2,
-            'border-color': 'data(color)',
-          },
+          style: { shape: 'round-rectangle', 'border-width': 2, 'border-color': 'data(color)' },
         },
         {
           selector: 'edge[type="dream-tag"]',
-          style: {
-            width: 1,
-            'line-color': '#3f3f50',
-            'curve-style': 'bezier',
-            opacity: 0.5,
-          },
+          style: { width: 1, 'line-color': '#3f3f50', 'curve-style': 'bezier', opacity: 0.5 },
         },
         {
           selector: 'edge[type="tag-tag"]',
@@ -183,25 +169,9 @@ export function GraphView() {
             opacity: 0.7,
           },
         },
-        {
-          selector: 'node:selected',
-          style: {
-            'border-width': 3,
-            'border-color': '#6366f1',
-          },
-        },
-        {
-          selector: '.faded',
-          style: {
-            opacity: 0.15,
-          },
-        },
-        {
-          selector: '.highlighted',
-          style: {
-            opacity: 1,
-          },
-        },
+        { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#6366f1' } },
+        { selector: '.faded',        style: { opacity: 0.15 } },
+        { selector: '.highlighted',  style: { opacity: 1 } },
       ],
       layout: {
         name: 'fcose',
@@ -214,29 +184,17 @@ export function GraphView() {
       } as any,
     });
 
-    // Handle node click
     cy.on('tap', 'node', (e) => {
       const node = e.target;
-      const nodeId = node.id();
-
-      // Highlight connected nodes
       cy.elements().addClass('faded');
       node.addClass('highlighted');
       node.neighborhood().addClass('highlighted');
-
-      setSelectedNode(nodeId);
-
-      // If it's a dream node, allow opening editor
-      if (node.data('type') === 'dream') {
-        const dreamId = nodeId.replace('dream-', '');
-        // Double click to open
-        if (e.originalEvent.detail === 2) {
-          openEditor(dreamId);
-        }
+      setSelectedNode(node.id());
+      if (node.data('type') === 'dream' && e.originalEvent.detail === 2) {
+        openEditor(node.id().replace('dream-', ''));
       }
     });
 
-    // Handle background click
     cy.on('tap', (e) => {
       if (e.target === cy) {
         cy.elements().removeClass('faded highlighted');
@@ -245,34 +203,24 @@ export function GraphView() {
     });
 
     cyRef.current = cy;
-
-    return () => {
-      cy.destroy();
-    };
+    return () => cy.destroy();
   }, [elements, openEditor]);
 
-  const handleZoomIn = () => {
-    cyRef.current?.zoom(cyRef.current.zoom() * 1.2);
-  };
-
-  const handleZoomOut = () => {
-    cyRef.current?.zoom(cyRef.current.zoom() / 1.2);
-  };
-
-  const handleFit = () => {
-    cyRef.current?.fit(undefined, 50);
-  };
-
-  const handleReset = () => {
+  const handleZoomIn  = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.2);
+  const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() / 1.2);
+  const handleFit     = () => cyRef.current?.fit(undefined, 50);
+  const handleReset   = () => {
     cyRef.current?.elements().removeClass('faded highlighted');
     cyRef.current?.fit(undefined, 50);
     setSelectedNode(null);
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col gap-4">
-      {/* Controls */}
-      <div className="flex items-center justify-between">
+    <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
+
+      {/* ── Top bar: filter tabs | date range (centre) | zoom ───────────── */}
+      <div className="flex items-center justify-between gap-4">
+
         <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
@@ -283,6 +231,32 @@ export function GraphView() {
             <TabsTrigger value="custom">Custom</TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {/* Analysis date range — centred between the two control groups */}
+        <div className="flex items-center gap-2">
+          <Label htmlFor="graph-start" className="text-xs text-muted-foreground whitespace-nowrap">
+            From
+          </Label>
+          <Input
+            id="graph-start"
+            type="date"
+            value={startDate}
+            max={endDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-8 w-36 text-xs"
+          />
+          <Label htmlFor="graph-end" className="text-xs text-muted-foreground whitespace-nowrap">
+            To
+          </Label>
+          <Input
+            id="graph-end"
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-8 w-36 text-xs"
+          />
+        </div>
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={handleZoomIn}>
@@ -300,38 +274,33 @@ export function GraphView() {
         </div>
       </div>
 
-      {/* Legend */}
-      <Card className="p-3">
+      {/* ── Legend ──────────────────────────────────────────────────────── */}
+      <Card className="p-3 shrink-0">
         <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-[#6b7280]" />
-            <span>Dreams</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-[#22c55e]" />
-            <span>Location</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-[#3b82f6]" />
-            <span>Person</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-[#a855f7]" />
-            <span>Symbolic</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-[#f43f5e]" />
-            <span>Emotive</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-[#f59e0b]" />
-            <span>Custom</span>
-          </div>
+          {[
+            { color: '#6b7280', label: 'Dreams' },
+            { color: '#22c55e', label: 'Location' },
+            { color: '#3b82f6', label: 'Person' },
+            { color: '#a855f7', label: 'Symbolic' },
+            { color: '#f43f5e', label: 'Emotive' },
+            { color: '#f59e0b', label: 'Custom' },
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded" style={{ backgroundColor: color }} />
+              <span>{label}</span>
+            </div>
+          ))}
         </div>
       </Card>
 
-      {/* Graph container */}
-      <div ref={containerRef} className="flex-1 rounded-lg border bg-card cytoscape-container" />
+      {/* ── Graph canvas + collapsible stats panel (right) ──────────────── */}
+      <div className="flex-1 flex gap-3 min-h-0">
+        <div
+          ref={containerRef}
+          className="flex-1 rounded-lg border bg-card cytoscape-container min-h-0"
+        />
+        <GraphStats startDate={startDate} endDate={endDate} />
+      </div>
     </div>
   );
 }

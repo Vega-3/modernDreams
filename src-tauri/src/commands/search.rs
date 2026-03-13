@@ -134,7 +134,7 @@ fn get_dream_tags(conn: &rusqlite::Connection, dream_id: &str) -> Result<Vec<Tag
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count
+            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count, t.aliases
             FROM tags t
             JOIN dream_tags dt ON t.id = dt.tag_id
             WHERE dt.dream_id = ?1
@@ -146,6 +146,7 @@ fn get_dream_tags(conn: &rusqlite::Connection, dream_id: &str) -> Result<Vec<Tag
     let tags_iter = stmt
         .query_map(params![dream_id], |row| {
             let category_str: String = row.get(2)?;
+            let aliases_str: String = row.get(6).unwrap_or_else(|_| "[]".to_string());
             Ok(Tag {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -153,6 +154,7 @@ fn get_dream_tags(conn: &rusqlite::Connection, dream_id: &str) -> Result<Vec<Tag
                 color: row.get(3)?,
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
+                aliases: serde_json::from_str(&aliases_str).unwrap_or_default(),
             })
         })
         .map_err(|e| e.to_string())?;

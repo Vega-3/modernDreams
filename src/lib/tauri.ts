@@ -95,3 +95,36 @@ export const getObsidianPath = () => invoke<string>('get_obsidian_path');
 // OCR commands
 export const recognizeHandwriting = (imageBase64: string) =>
   invoke<string>('recognize_handwriting', { imageBase64 });
+
+// ── Graph theory analysis ─────────────────────────────────────────────────────
+
+export interface GraphNodeStat {
+  id: string;
+  name: string;
+  /** Integer for order/strength, float in [0,1] for centrality */
+  value: number;
+}
+
+export interface GraphEdgeStat {
+  source_id: string;
+  source_name: string;
+  target_id: string;
+  target_name: string;
+  weight: number;
+}
+
+export interface GraphStatsResult {
+  dream_count: number;
+  tag_count: number;
+  /** Top-5 tags by unweighted degree (number of distinct neighbours) */
+  top_order: GraphNodeStat[];
+  /** Top-5 tags by strength (sum of all edge weights) */
+  top_strength: GraphNodeStat[];
+  /** Top-5 tags by normalised weighted centrality s(i)/Σs */
+  top_centrality: GraphNodeStat[];
+  /** Top-5 tag pairs by co-occurrence weight */
+  top_edges: GraphEdgeStat[];
+}
+
+export const getGraphStats = (startDate: string, endDate: string) =>
+  invoke<GraphStatsResult>('get_graph_stats', { startDate, endDate });

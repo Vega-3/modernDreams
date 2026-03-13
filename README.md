@@ -89,6 +89,48 @@ The **Guide** page (sidebar → Guide) displays `public/GUIDE.md`. Edit that fil
 - Tips for using the handwriting scanner
 - Any other workflow notes
 
+## Graph Theory Analysis
+
+The **Graph** page includes a collapsible statistics panel (right side) that performs
+network analysis on the tag co-occurrence graph for any chosen date window.
+
+### How it works
+
+1. **Date range selection** — A *From / To* date picker (centred in the toolbar) scopes
+   the analysis to dreams that fall within that window.
+2. **Subgraph construction** — All dreams in the window are fetched along with their tags,
+   forming a bipartite dream–tag graph.
+3. **Vertex contraction** — Every dream node is contracted: for each pair of tags that
+   share a dream, an edge is added (or its weight incremented by 1). The result is a
+   **weighted undirected tag co-occurrence network** represented as an adjacency matrix
+   `W[i][j]` = number of shared dreams.
+4. **Python analysis** — The adjacency matrix is passed to `src-python/graph_analysis.py`,
+   which computes four families of statistics and returns the top 5 for each.
+
+### Metrics
+
+| Metric | Formula | Meaning |
+|---|---|---|
+| **Order** | `Σⱼ 𝟙[W[i][j] > 0]` | Distinct tag neighbours (unweighted degree) |
+| **Strength** | `Σⱼ W[i][j]` | Total co-occurrence weight (weighted degree) |
+| **Weighted Centrality** | `s(i) / Σₖ s(k)` | Node's share of total graph weight; in \[0, 1\] |
+| **Strongest Edge** | `W[i][j]` | Highest co-occurrence count between any two tags |
+
+### Requirements
+
+- **Python 3** must be installed and on `PATH` (`python` or `python3`).
+  No third-party packages are needed — the script uses only the standard library (`json`, `sys`).
+
+### Files
+
+```
+src-python/
+├── graph_analysis.py   # Python math engine
+└── GRAPHTHEORY.md      # Formula reference
+src-tauri/resources/
+└── graph_analysis.py   # Compiled into the binary via include_str!
+```
+
 ## Keyboard Shortcuts
 
 - `Ctrl+K` - Open search dialog
