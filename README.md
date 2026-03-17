@@ -8,7 +8,7 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Frontend**: React 18 + TypeScript + Vite
 - **Database**: SQLite + FTS5 (full-text search)
 - **Rich Text Editor**: TipTap (with image support)
-- **OCR**: Windows.Media.Ocr (native Windows handwriting recognition)
+- **AI Transcription**: Anthropic Claude Haiku (two-stage handwriting transcription pipeline)
 - **Graph Visualization**: Cytoscape.js
 - **Calendar**: FullCalendar
 - **UI Components**: shadcn/ui + Tailwind CSS
@@ -22,7 +22,7 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Graph View**: Network visualization of dream-tag relationships
 - **Full-text Search**: Quick search across all dreams (Ctrl+K)
 - **Obsidian Export**: Export to Obsidian vault with wikilinks and Dataview support
-- **Handwriting Scan**: Import handwritten dream notes via the Windows OCR engine (Windows 10/11)
+- **Handwriting Scan**: Import handwritten dream notes using a two-stage Claude AI pipeline — raw transcription followed by English translation, with auto tag matching
 - **Grammar Fix**: One-click toolbar button that corrects common grammar issues (contractions, capitalisation, double spaces)
 - **Auto-match Tags**: Scans the dream text and automatically applies any tags whose name appears in the content
 - **Inline Images**: Attach and embed images directly into dream entries via the toolbar
@@ -79,6 +79,31 @@ dreams/
 ├── package.json
 └── tailwind.config.js
 ```
+
+## AI Handwriting Transcription
+
+The **Scan Handwriting** button (Journal header) lets you import photos of handwritten dream notes
+using Claude AI instead of the previous Windows OCR engine.
+
+### How it works
+
+1. **Upload** one or more images of handwritten notes (PNG, JPEG, etc.).
+2. **Stage 1 — Transcription**: Each image is sent to `claude-haiku-4-5-20251001` with a vision
+   prompt. Claude reads the handwriting and produces a raw transcript, preserving the original
+   language, abbreviations, and line breaks.
+3. **Stage 2 — English translation**: The raw transcript is sent to a second Claude Haiku call
+   (text-only, cheaper) which translates and refines it into clear, fluent English.
+4. **Review**: The preview dialog shows both versions. You can toggle between them with the
+   **English Translation / Raw Transcript** buttons. Switching versions automatically re-runs tag
+   matching on the selected content.
+5. **Save**: Choose the version you prefer (or edit the text freely) and save as a dream entry.
+
+### Setup
+
+1. Get an API key from [console.anthropic.com](https://console.anthropic.com).
+2. Open **Settings → Anthropic API Key**, paste your key, and click **Save**.
+
+The key is stored in browser localStorage and is sent only to Anthropic's API endpoint.
 
 ## Guide
 

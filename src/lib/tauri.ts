@@ -92,9 +92,26 @@ export const searchDreams = (query: SearchQuery) => invoke<SearchResult>('search
 export const exportToObsidian = () => invoke<ExportResult>('export_to_obsidian');
 export const getObsidianPath = () => invoke<string>('get_obsidian_path');
 
-// OCR commands
+// OCR commands (legacy — kept for reference, replaced by Claude AI below)
 export const recognizeHandwriting = (imageBase64: string) =>
   invoke<string>('recognize_handwriting', { imageBase64 });
+
+// Claude AI handwriting transcription
+export interface TranscriptionResult {
+  raw_transcript: string;
+  english_transcript: string;
+}
+
+export const transcribeHandwritingClaude = (
+  imageBase64: string,
+  imageMediaType: string,
+  apiKey: string,
+) =>
+  invoke<TranscriptionResult>('transcribe_handwriting_claude', {
+    imageBase64,
+    imageMediaType,
+    apiKey,
+  });
 
 // ── Graph theory analysis ─────────────────────────────────────────────────────
 

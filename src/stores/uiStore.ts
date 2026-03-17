@@ -3,7 +3,8 @@ import { create } from 'zustand';
 type View = 'dashboard' | 'journal' | 'calendar' | 'graph' | 'tags' | 'settings' | 'guide';
 
 interface RecognizedDream {
-  text: string;
+  rawTranscript: string;
+  englishTranscript: string;
   imagePreview: string;
 }
 

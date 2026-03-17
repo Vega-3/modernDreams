@@ -1,11 +1,21 @@
 import { useState } from 'react';
-import { FolderOpen, Upload, Check } from 'lucide-react';
+import { FolderOpen, Upload, Check, KeyRound } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { exportToObsidian } from '@/lib/tauri';
 
 export function SettingsPage() {
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+
+  const saveApiKey = () => {
+    localStorage.setItem('anthropic_api_key', apiKey.trim());
+    setApiKeySaved(true);
+    setTimeout(() => setApiKeySaved(false), 2000);
+  };
+
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<{
     success: boolean;
@@ -37,6 +47,46 @@ export function SettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      {/* Anthropic API Key */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5" />
+            Anthropic API Key
+          </CardTitle>
+          <CardDescription>
+            Required for AI-powered handwriting transcription. Your key is stored locally in the
+            browser and is only sent directly to Anthropic's API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              placeholder="sk-ant-api03-..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
+            />
+            <Button onClick={saveApiKey} disabled={!apiKey.trim()}>
+              {apiKeySaved ? (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Saved
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Get your API key at{' '}
+            <span className="font-medium">console.anthropic.com</span>. The key is used for
+            handwriting transcription (Scan Handwriting button in the Journal).
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Obsidian Export */}
       <Card>
         <CardHeader>

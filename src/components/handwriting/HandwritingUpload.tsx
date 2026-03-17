@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Upload, Image, X, FileText, Loader2 } from 'lucide-react';
-import { recognizeHandwriting } from '@/lib/tauri';
+import { transcribeHandwritingClaude } from '@/lib/tauri';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,14 +18,19 @@ interface UploadedImage {
   file: File;
   preview: string;
   status: 'pending' | 'processing' | 'done' | 'error';
-  recognizedText?: string;
+  rawTranscript?: string;
+  englishTranscript?: string;
   error?: string;
 }
 
 interface HandwritingUploadProps {
   open: boolean;
   onClose: () => void;
-  onImagesProcessed: (results: { text: string; imagePreview: string }[]) => void;
+  onImagesProcessed: (results: {
+    rawTranscript: string;
+    englishTranscript: string;
+    imagePreview: string;
+  }[]) => void;
 }
 
 /** Convert a File to a plain base64 string (no data-URL prefix). */
@@ -46,6 +51,7 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const [apiKeyMissing, setApiKeyMissing] = useState(false);
 
   // Bug fix: Radix Dialog does NOT call onOpenChange when the `open` prop is changed
   // programmatically from the parent — only on user-initiated closes (Escape, backdrop).
@@ -58,6 +64,7 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
       });
       setProcessingProgress(0);
       setIsProcessing(false);
+      setApiKeyMissing(false);
     }
   }, [open]);
 
@@ -107,6 +114,12 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
   const processImages = async () => {
     if (images.length === 0) return;
 
+    const apiKey = localStorage.getItem('anthropic_api_key') ?? '';
+    if (!apiKey.trim()) {
+      setApiKeyMissing(true);
+      return;
+    }
+    setApiKeyMissing(false);
     setIsProcessing(true);
     setProcessingProgress(0);
 
@@ -121,12 +134,14 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
 
       try {
         const base64 = await fileToBase64(image.file);
-        const text = await recognizeHandwriting(base64);
+        const mediaType = image.file.type || 'image/jpeg';
+        const result = await transcribeHandwritingClaude(base64, mediaType, apiKey);
 
         updatedImages[i] = {
           ...image,
           status: 'done',
-          recognizedText: text.trim(),
+          rawTranscript: result.raw_transcript.trim(),
+          englishTranscript: result.english_transcript.trim(),
         };
       } catch (error) {
         updatedImages[i] = {
@@ -140,12 +155,11 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
       setProcessingProgress(((i + 1) / total) * 100);
     }
 
-    // Include every image that completed successfully, even if OCR returned no text.
-    // The user can read the original image and type the text themselves in the preview.
     const successfulResults = updatedImages
       .filter((img) => img.status === 'done')
       .map((img) => ({
-        text: img.recognizedText ?? '',
+        rawTranscript: img.rawTranscript ?? '',
+        englishTranscript: img.englishTranscript ?? '',
         imagePreview: img.preview,
       }));
 
@@ -170,8 +184,8 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
             Upload Handwritten Dreams
           </DialogTitle>
           <DialogDescription>
-            Upload images of handwritten dream entries. Text is recognised using the Windows OCR
-            engine, then you can review and edit before saving.
+            Upload images of handwritten dream entries. Claude AI transcribes the text and
+            translates it to English — you can review both versions before saving.
           </DialogDescription>
         </DialogHeader>
 
@@ -256,6 +270,14 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
             </ScrollArea>
           )}
 
+          {/* API key missing warning */}
+          {apiKeyMissing && (
+            <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-600 dark:text-amber-400">
+              No Anthropic API key configured. Please go to{' '}
+              <strong>Settings → Anthropic API Key</strong> and add your key before transcribing.
+            </div>
+          )}
+
           {/* Per-image errors */}
           {images.some((img) => img.status === 'error') && (
             <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
@@ -274,7 +296,7 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
           {isProcessing && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Recognising text…</span>
+                <span>Transcribing with Claude AI…</span>
                 <span>{Math.round(processingProgress)}%</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -298,12 +320,12 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
             {isProcessing ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Processing…
+                Transcribing…
               </>
             ) : (
               <>
                 <Image className="h-4 w-4 mr-2" />
-                Recognise Text ({images.length})
+                Transcribe ({images.length})
               </>
             )}
           </Button>

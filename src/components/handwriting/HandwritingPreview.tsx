@@ -17,10 +17,12 @@ import {
 } from '@/components/ui/dialog';
 import { TagPicker } from '@/components/tags/TagPicker';
 import { useDreamStore } from '@/stores/dreamStore';
+import { useTagStore } from '@/stores/tagStore';
 import type { Tag } from '@/lib/tauri';
 
 interface RecognizedDream {
-  text: string;
+  rawTranscript: string;
+  englishTranscript: string;
   imagePreview: string;
 }
 
@@ -30,6 +32,8 @@ interface HandwritingPreviewProps {
   recognizedDreams: RecognizedDream[];
 }
 
+type TranscriptChoice = 'raw' | 'english';
+
 interface DreamFormData {
   title: string;
   content: string;
@@ -38,6 +42,7 @@ interface DreamFormData {
   moodRating: number | null;
   clarityRating: number | null;
   tags: Tag[];
+  selectedTranscript: TranscriptChoice;
 }
 
 function generateTitle(text: string): string {
@@ -48,41 +53,59 @@ function generateTitle(text: string): string {
   return firstLine.substring(0, 47) + '...';
 }
 
-function buildFormData(dreams: RecognizedDream[]): DreamFormData[] {
-  return dreams.map((dream) => ({
-    title: generateTitle(dream.text),
-    content: dream.text,
-    dreamDate: format(new Date(), 'yyyy-MM-dd'),
-    isLucid: false,
-    moodRating: null,
-    clarityRating: null,
-    tags: [],
-  }));
+function buildFormData(
+  dreams: RecognizedDream[],
+  allTags: Tag[],
+): DreamFormData[] {
+  return dreams.map((dream) => {
+    const content = dream.englishTranscript || dream.rawTranscript;
+    return {
+      title: generateTitle(content),
+      content,
+      dreamDate: format(new Date(), 'yyyy-MM-dd'),
+      isLucid: false,
+      moodRating: null,
+      clarityRating: null,
+      tags: autoMatchTags(content, [], allTags),
+      selectedTranscript: 'english' as TranscriptChoice,
+    };
+  });
+}
+
+/** Run tag auto-matching against dream content. */
+function autoMatchTags(content: string, existing: Tag[], allTags: Tag[]): Tag[] {
+  const lower = content.toLowerCase();
+  const matched = allTags.filter(
+    (tag) =>
+      !existing.some((t) => t.id === tag.id) &&
+      (lower.includes(tag.name.toLowerCase()) ||
+        tag.aliases.some((alias) => lower.includes(alias.toLowerCase()))),
+  );
+  return [...existing, ...matched];
 }
 
 export function HandwritingPreview({ open, onClose, recognizedDreams }: HandwritingPreviewProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [formData, setFormData] = useState<DreamFormData[]>(() => buildFormData(recognizedDreams));
+  const [formData, setFormData] = useState<DreamFormData[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   const { createDream } = useDreamStore();
+  const { tags: allTags } = useTagStore();
 
   // Reinitialise state whenever the dialog opens with a fresh set of recognised dreams
   useEffect(() => {
     if (open && recognizedDreams.length > 0) {
-      setFormData(buildFormData(recognizedDreams));
+      setFormData(buildFormData(recognizedDreams, allTags));
       setCurrentIndex(0);
       setSavedCount(0);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, recognizedDreams]);
 
   const currentDream = recognizedDreams[currentIndex];
-  // Bug fix: formData is initialised from [] on first mount (recognizedDreams isn't populated
-  // yet). Fall back to building it fresh from recognizedDreams on the first render so the
-  // Dialog can open immediately without waiting for the useEffect to fire.
   const resolvedFormData =
-    formData.length === recognizedDreams.length ? formData : buildFormData(recognizedDreams);
+    formData.length === recognizedDreams.length ? formData : buildFormData(recognizedDreams, allTags);
   const currentForm = resolvedFormData[currentIndex];
   const totalDreams = recognizedDreams.length;
 
@@ -94,16 +117,27 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
     });
   };
 
+  /** Switch between raw / English transcript, update content, and re-run tag matching. */
+  const handleTranscriptSwitch = (choice: TranscriptChoice) => {
+    const content =
+      choice === 'raw'
+        ? currentDream.rawTranscript
+        : currentDream.englishTranscript;
+    const newTags = autoMatchTags(content, [], allTags);
+    updateCurrentForm({
+      selectedTranscript: choice,
+      content,
+      title: generateTitle(content),
+      tags: newTags,
+    });
+  };
+
   const handlePrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   };
 
   const handleNext = () => {
-    if (currentIndex < totalDreams - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
+    if (currentIndex < totalDreams - 1) setCurrentIndex(currentIndex + 1);
   };
 
   const handleSaveCurrent = async () => {
@@ -124,11 +158,9 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
 
       setSavedCount((prev) => prev + 1);
 
-      // Move to next or close if this was the last one
       if (currentIndex < totalDreams - 1) {
         setCurrentIndex(currentIndex + 1);
       } else {
-        // All done
         handleClose();
       }
     } catch (error) {
@@ -183,11 +215,14 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
     return null;
   }
 
+  const hasRaw = currentDream.rawTranscript.trim().length > 0;
+  const hasEnglish = currentDream.englishTranscript.trim().length > 0;
+
   return (
     <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Review Recognized Dream</DialogTitle>
+          <DialogTitle>Review Transcribed Dream</DialogTitle>
           <DialogDescription>
             Dream {currentIndex + 1} of {totalDreams}
             {savedCount > 0 && ` (${savedCount} saved)`}
@@ -257,15 +292,51 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
             </div>
           </div>
 
-          {/* Recognized text editor */}
-          <div className="space-y-2">
-            <Label htmlFor="content">Recognized Text (edit as needed)</Label>
+          {/* Transcript selector */}
+          {(hasRaw || hasEnglish) && (
+            <div className="space-y-2">
+              <Label>Transcript Version</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTranscriptSwitch('english')}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm transition-colors ${
+                    currentForm.selectedTranscript === 'english'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-muted border-input'
+                  }`}
+                  disabled={!hasEnglish}
+                >
+                  English Translation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTranscriptSwitch('raw')}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm transition-colors ${
+                    currentForm.selectedTranscript === 'raw'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-muted border-input'
+                  }`}
+                  disabled={!hasRaw}
+                >
+                  Raw Transcript
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Switching versions auto-updates tags. You can still edit the text below.
+              </p>
+            </div>
+          )}
+
+          {/* Content textarea */}
+          <div className="space-y-2 mt-4">
+            <Label htmlFor="content">Content (edit as needed)</Label>
             <textarea
               id="content"
               value={currentForm.content}
               onChange={(e) => updateCurrentForm({ content: e.target.value })}
               className="w-full h-48 p-3 rounded-md border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Recognized dream content..."
+              placeholder="Transcribed dream content..."
             />
           </div>
 

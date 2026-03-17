@@ -1,3 +1,4 @@
+pub mod claude;
 pub mod dreams;
 pub mod graph;
 pub mod obsidian;
