@@ -163,9 +163,13 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
         imagePreview: img.preview,
       }));
 
-    onImagesProcessed(successfulResults);
-
     setIsProcessing(false);
+
+    // Only close and proceed to preview if at least one image succeeded.
+    // If all failed, leave the dialog open so the error messages are visible.
+    if (successfulResults.length > 0) {
+      onImagesProcessed(successfulResults);
+    }
   };
 
   const handleClose = () => {
