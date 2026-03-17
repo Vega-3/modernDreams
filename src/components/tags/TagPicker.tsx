@@ -66,6 +66,7 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
         category: newTagCategory,
         color: getCategoryColor(newTagCategory),
         description: null,
+        aliases: [],
       });
       onTagsChange([...selectedTags, newTag]);
       setSearch('');
