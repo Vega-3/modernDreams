@@ -14,7 +14,7 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   waking_life_context
+                   waking_life_context, analysis_notes
             FROM dreams
             ORDER BY dream_date DESC, created_at DESC
             "#,
@@ -35,6 +35,7 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
                 waking_life_context: row.get(10)?,
+                analysis_notes: row.get(11)?,
                 tags: Vec::new(),
             })
         })
@@ -59,7 +60,7 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   waking_life_context
+                   waking_life_context, analysis_notes
             FROM dreams
             WHERE id = ?1
             "#,
@@ -80,6 +81,7 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
                 waking_life_context: row.get(10)?,
+                analysis_notes: row.get(11)?,
                 tags: Vec::new(),
             })
         })
@@ -109,8 +111,8 @@ pub fn create_dream(
         r#"
         INSERT INTO dreams (id, title, content_html, content_plain, dream_date,
                            created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                           waking_life_context)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                           waking_life_context, analysis_notes)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
         "#,
         params![
             id,
@@ -124,6 +126,7 @@ pub fn create_dream(
             input.mood_rating,
             input.clarity_rating,
             input.waking_life_context,
+            input.analysis_notes,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -161,6 +164,7 @@ pub fn create_dream(
         mood_rating: input.mood_rating,
         clarity_rating: input.clarity_rating,
         waking_life_context: input.waking_life_context,
+        analysis_notes: input.analysis_notes,
         tags,
     })
 }
@@ -179,7 +183,7 @@ pub fn update_dream(
         UPDATE dreams
         SET title = ?2, content_html = ?3, content_plain = ?4, dream_date = ?5,
             updated_at = ?6, is_lucid = ?7, mood_rating = ?8, clarity_rating = ?9,
-            waking_life_context = ?10
+            waking_life_context = ?10, analysis_notes = ?11
         WHERE id = ?1
         "#,
         params![
@@ -193,6 +197,7 @@ pub fn update_dream(
             input.mood_rating,
             input.clarity_rating,
             input.waking_life_context,
+            input.analysis_notes,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -236,7 +241,7 @@ pub fn update_dream(
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   waking_life_context
+                   waking_life_context, analysis_notes
             FROM dreams
             WHERE id = ?1
             "#,
@@ -257,6 +262,7 @@ pub fn update_dream(
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
                 waking_life_context: row.get(10)?,
+                analysis_notes: row.get(11)?,
                 tags,
             })
         })

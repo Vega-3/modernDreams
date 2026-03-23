@@ -58,6 +58,16 @@ export function DreamViewer({ dream, open, onClose, onEdit }: DreamViewerProps) 
             </div>
           )}
 
+          {/* Analysis notes */}
+          {dream.analysis_notes && (
+            <div className="border-t pt-4 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Analysis Notes
+              </p>
+              <p className="text-sm text-muted-foreground italic">{dream.analysis_notes}</p>
+            </div>
+          )}
+
           {/* Ratings */}
           {(dream.mood_rating || dream.clarity_rating) && (
             <div className="flex gap-4 text-xs text-muted-foreground border-t pt-3">

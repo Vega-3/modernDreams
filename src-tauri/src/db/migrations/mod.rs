@@ -15,7 +15,8 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             is_lucid BOOLEAN DEFAULT FALSE,
             mood_rating INTEGER,
             clarity_rating INTEGER,
-            waking_life_context TEXT
+            waking_life_context TEXT,
+            analysis_notes TEXT
         );
 
         CREATE TABLE IF NOT EXISTS tags (
@@ -102,6 +103,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     // Silently ignored if the column already exists (fresh DB has it from CREATE TABLE).
     let _ = conn.execute(
         "ALTER TABLE dreams ADD COLUMN waking_life_context TEXT",
+        [],
+    );
+
+    // Additive migration: add analysis_notes column to existing databases.
+    let _ = conn.execute(
+        "ALTER TABLE dreams ADD COLUMN analysis_notes TEXT",
         [],
     );
 

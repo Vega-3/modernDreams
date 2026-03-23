@@ -13,6 +13,7 @@ pub struct Dream {
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
     pub waking_life_context: Option<String>,
+    pub analysis_notes: Option<String>,
     #[serde(default)]
     pub tags: Vec<Tag>,
 }
@@ -41,6 +42,7 @@ pub struct CreateDreamInput {
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
     pub waking_life_context: Option<String>,
+    pub analysis_notes: Option<String>,
     pub tag_ids: Vec<String>,
     #[serde(default)]
     pub word_tag_associations: Vec<WordTagAssociation>,
@@ -57,6 +59,7 @@ pub struct UpdateDreamInput {
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
     pub waking_life_context: Option<String>,
+    pub analysis_notes: Option<String>,
     pub tag_ids: Vec<String>,
     #[serde(default)]
     pub word_tag_associations: Vec<WordTagAssociation>,

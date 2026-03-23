@@ -12,6 +12,7 @@ export interface Dream {
   mood_rating: number | null;
   clarity_rating: number | null;
   waking_life_context?: string | null;
+  analysis_notes?: string | null;
   tags: Tag[];
 }
 
@@ -48,6 +49,7 @@ export interface CreateDreamInput {
   mood_rating: number | null;
   clarity_rating: number | null;
   waking_life_context?: string | null;
+  analysis_notes?: string | null;
   tag_ids: string[];
   word_tag_associations: WordTagAssociation[];
 }

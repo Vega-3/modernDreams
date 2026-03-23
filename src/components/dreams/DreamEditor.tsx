@@ -120,6 +120,7 @@ export function DreamEditor() {
   const [clarityRating, setClarityRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [wakingLifeContext, setWakingLifeContext] = useState('');
+  const [analysisNotes, setAnalysisNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const editingDream = editingDreamId ? dreams.find((d) => d.id === editingDreamId) : null;
@@ -157,6 +158,7 @@ export function DreamEditor() {
       setClarityRating(editingDream.clarity_rating);
       setSelectedTags(editingDream.tags);
       setWakingLifeContext(editingDream.waking_life_context || '');
+      setAnalysisNotes(editingDream.analysis_notes || '');
       editor.commands.setContent(editingDream.content_html);
     } else if (!editingDreamId && editor) {
       setTitle('');
@@ -166,6 +168,7 @@ export function DreamEditor() {
       setClarityRating(null);
       setSelectedTags([]);
       setWakingLifeContext('');
+      setAnalysisNotes('');
       editor.commands.setContent('');
     }
   }, [editingDream, editingDreamId, editor]);
@@ -190,6 +193,7 @@ export function DreamEditor() {
           mood_rating: moodRating,
           clarity_rating: clarityRating,
           waking_life_context: wakingLifeContext.trim() || null,
+          analysis_notes: analysisNotes.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
         });
@@ -203,6 +207,7 @@ export function DreamEditor() {
           mood_rating: moodRating,
           clarity_rating: clarityRating,
           waking_life_context: wakingLifeContext.trim() || null,
+          analysis_notes: analysisNotes.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
         });
@@ -513,6 +518,19 @@ export function DreamEditor() {
                 step={1}
               />
             </div>
+          </div>
+
+          {/* Analysis Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="analysis-notes">Analysis Notes</Label>
+            <Textarea
+              id="analysis-notes"
+              placeholder="Patterns, symbols, interpretations, recurring themes…"
+              value={analysisNotes}
+              onChange={(e) => setAnalysisNotes(e.target.value)}
+              className="resize-none"
+              rows={3}
+            />
           </div>
         </div>
 
