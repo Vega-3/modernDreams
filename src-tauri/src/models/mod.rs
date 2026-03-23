@@ -75,6 +75,7 @@ pub struct Tag {
     pub usage_count: i32,
     #[serde(default)]
     pub aliases: Vec<String>,
+    pub emotive_subcategory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -117,6 +118,7 @@ pub struct CreateTagInput {
     pub description: Option<String>,
     #[serde(default)]
     pub aliases: Vec<String>,
+    pub emotive_subcategory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +130,7 @@ pub struct UpdateTagInput {
     pub description: Option<String>,
     #[serde(default)]
     pub aliases: Vec<String>,
+    pub emotive_subcategory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

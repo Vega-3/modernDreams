@@ -24,6 +24,7 @@ export interface Tag {
   description: string | null;
   usage_count: number;
   aliases: string[];
+  emotive_subcategory?: string | null;
 }
 
 export type TagCategory = 'location' | 'person' | 'symbolic' | 'emotive' | 'custom';
@@ -64,6 +65,7 @@ export interface CreateTagInput {
   color: string;
   description: string | null;
   aliases: string[];
+  emotive_subcategory?: string | null;
 }
 
 export interface UpdateTagInput extends CreateTagInput {

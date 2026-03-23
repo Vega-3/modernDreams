@@ -26,7 +26,8 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             color TEXT NOT NULL DEFAULT '#6366f1',
             description TEXT,
             usage_count INTEGER DEFAULT 0,
-            aliases TEXT NOT NULL DEFAULT '[]'
+            aliases TEXT NOT NULL DEFAULT '[]',
+            emotive_subcategory TEXT
         );
 
         CREATE TABLE IF NOT EXISTS dream_tags (
@@ -109,6 +110,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     // Additive migration: add analysis_notes column to existing databases.
     let _ = conn.execute(
         "ALTER TABLE dreams ADD COLUMN analysis_notes TEXT",
+        [],
+    );
+
+    // Additive migration: add emotive_subcategory column to tags.
+    let _ = conn.execute(
+        "ALTER TABLE tags ADD COLUMN emotive_subcategory TEXT",
         [],
     );
 

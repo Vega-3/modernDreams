@@ -41,14 +41,22 @@ function parseAliasesInput(raw: string): string[] {
     .filter(Boolean);
 }
 
+const EMOTIVE_SUBCATEGORIES = [
+  { id: 'positive', label: 'Positive', color: '#eab308' },
+  { id: 'neutral', label: 'Neutral', color: '#f97316' },
+  { id: 'negative', label: 'Negative', color: '#f43f5e' },
+] as const;
+
 export function TagsPage() {
   const { tags, fetchTags, createTag, updateTag, deleteTag } = useTagStore();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<TagCategory>('location');
+  const [activeEmotiveSubcategory, setActiveEmotiveSubcategory] = useState<string>('positive');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<TagCategory>('custom');
+  const [emotiveSubcategory, setEmotiveSubcategory] = useState<string | null>(null);
   const [color, setColor] = useState('#6366f1');
   const [description, setDescription] = useState('');
   // Comma-separated in the UI; converted to/from string[] on save/load
@@ -62,6 +70,7 @@ export function TagsPage() {
 
   const filteredTags = tags.filter((tag) => {
     if (tag.category !== activeCategory) return false;
+    if (activeCategory === 'emotive' && (tag.emotive_subcategory ?? 'negative') !== activeEmotiveSubcategory) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -75,6 +84,7 @@ export function TagsPage() {
       setEditingTag(tag);
       setName(tag.name);
       setCategory(tag.category);
+      setEmotiveSubcategory(tag.emotive_subcategory ?? null);
       setColor(tag.color);
       setDescription(tag.description || '');
       setAliases(tag.aliases.join(', '));
@@ -92,7 +102,9 @@ export function TagsPage() {
       setEditingTag(null);
       setName('');
       setCategory(activeCategory);
-      setColor(getCategoryColor(activeCategory));
+      const initSubcat = activeCategory === 'emotive' ? activeEmotiveSubcategory : null;
+      setEmotiveSubcategory(initSubcat);
+      setColor(getCategoryColor(activeCategory, initSubcat));
       setDescription('');
       setAliases('');
       setWordAssociations([]);
@@ -114,6 +126,7 @@ export function TagsPage() {
           color,
           description: description.trim() || null,
           aliases: parsedAliases,
+          emotive_subcategory: category === 'emotive' ? emotiveSubcategory : null,
         });
       } else {
         await createTag({
@@ -122,6 +135,7 @@ export function TagsPage() {
           color,
           description: description.trim() || null,
           aliases: parsedAliases,
+          emotive_subcategory: category === 'emotive' ? emotiveSubcategory : null,
         });
       }
       setIsEditorOpen(false);
@@ -167,6 +181,26 @@ export function TagsPage() {
 
         {categories.map((cat) => (
           <TabsContent key={cat.id} value={cat.id} className="mt-4">
+            {/* Emotive sub-tabs */}
+            {cat.id === 'emotive' && (
+              <div className="flex gap-2 mb-4">
+                {EMOTIVE_SUBCATEGORIES.map((sub) => (
+                  <button
+                    key={sub.id}
+                    onClick={() => setActiveEmotiveSubcategory(sub.id)}
+                    className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+                    style={{
+                      backgroundColor: activeEmotiveSubcategory === sub.id ? sub.color + '33' : 'transparent',
+                      borderColor: sub.color,
+                      color: sub.color,
+                      fontWeight: activeEmotiveSubcategory === sub.id ? 700 : 400,
+                    }}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {filteredTags.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
@@ -250,7 +284,9 @@ export function TagsPage() {
                     size="sm"
                     onClick={() => {
                       setCategory(cat.id);
-                      setColor(getCategoryColor(cat.id));
+                      const subcat = cat.id === 'emotive' ? (emotiveSubcategory ?? 'negative') : null;
+                      setEmotiveSubcategory(subcat);
+                      setColor(getCategoryColor(cat.id, subcat));
                     }}
                   >
                     {cat.label}
@@ -258,6 +294,34 @@ export function TagsPage() {
                 ))}
               </div>
             </div>
+
+            {/* Emotive subcategory */}
+            {category === 'emotive' && (
+              <div className="space-y-2">
+                <Label>Subcategory</Label>
+                <div className="flex gap-2">
+                  {EMOTIVE_SUBCATEGORIES.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setEmotiveSubcategory(sub.id);
+                        setColor(sub.color);
+                      }}
+                      className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+                      style={{
+                        backgroundColor: emotiveSubcategory === sub.id ? sub.color + '33' : 'transparent',
+                        borderColor: sub.color,
+                        color: sub.color,
+                        fontWeight: emotiveSubcategory === sub.id ? 700 : 400,
+                      }}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Color</Label>

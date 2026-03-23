@@ -288,7 +288,7 @@ fn get_dream_tags(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count, t.aliases
+            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count, t.aliases, t.emotive_subcategory
             FROM tags t
             JOIN dream_tags dt ON t.id = dt.tag_id
             WHERE dt.dream_id = ?1
@@ -309,6 +309,7 @@ fn get_dream_tags(
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
                 aliases: serde_json::from_str(&aliases_str).unwrap_or_default(),
+                emotive_subcategory: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;
