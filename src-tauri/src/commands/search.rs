@@ -21,7 +21,8 @@ pub fn search_dreams(
             .prepare(
                 r#"
                 SELECT id, title, content_html, content_plain, dream_date,
-                       created_at, updated_at, is_lucid, mood_rating, clarity_rating
+                       created_at, updated_at, is_lucid, mood_rating, clarity_rating,
+                       waking_life_context, analysis_notes
                 FROM dreams
                 ORDER BY dream_date DESC, created_at DESC
                 LIMIT 50
@@ -42,6 +43,8 @@ pub fn search_dreams(
                     is_lucid: row.get(7)?,
                     mood_rating: row.get(8)?,
                     clarity_rating: row.get(9)?,
+                    waking_life_context: row.get(10)?,
+                    analysis_notes: row.get(11)?,
                     tags: Vec::new(),
                 })
             })
@@ -65,7 +68,8 @@ pub fn search_dreams(
         .prepare(
             r#"
             SELECT d.id, d.title, d.content_html, d.content_plain, d.dream_date,
-                   d.created_at, d.updated_at, d.is_lucid, d.mood_rating, d.clarity_rating
+                   d.created_at, d.updated_at, d.is_lucid, d.mood_rating, d.clarity_rating,
+                   d.waking_life_context, d.analysis_notes
             FROM dreams d
             WHERE d.id IN (SELECT id FROM dreams_fts WHERE dreams_fts MATCH ?1)
             ORDER BY d.dream_date DESC, d.created_at DESC
@@ -87,6 +91,8 @@ pub fn search_dreams(
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
+                waking_life_context: row.get(10)?,
+                analysis_notes: row.get(11)?,
                 tags: Vec::new(),
             })
         })
@@ -134,7 +140,7 @@ fn get_dream_tags(conn: &rusqlite::Connection, dream_id: &str) -> Result<Vec<Tag
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count, t.aliases
+            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count, t.aliases, t.emotive_subcategory
             FROM tags t
             JOIN dream_tags dt ON t.id = dt.tag_id
             WHERE dt.dream_id = ?1
@@ -155,6 +161,7 @@ fn get_dream_tags(conn: &rusqlite::Connection, dream_id: &str) -> Result<Vec<Tag
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
                 aliases: serde_json::from_str(&aliases_str).unwrap_or_default(),
+                emotive_subcategory: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;
