@@ -31,6 +31,7 @@ pub fn run() {
             commands::obsidian::get_obsidian_path,
             commands::ocr::recognize_handwriting,
             commands::claude::transcribe_handwriting_claude,
+            commands::claude::verify_api_key,
             commands::graph::get_graph_stats,
         ])
         .run(tauri::generate_context!())

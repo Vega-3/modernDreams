@@ -86,6 +86,29 @@ async fn call_claude(
 
 // ─── Tauri command ────────────────────────────────────────────────────────────
 
+/// Verify that an API key is valid and the account has sufficient credits.
+/// Makes a minimal text-only call so it costs almost nothing.
+#[tauri::command]
+pub async fn verify_api_key(api_key: String) -> Result<(), String> {
+    if api_key.trim().is_empty() {
+        return Err("No API key provided.".to_string());
+    }
+
+    let client = reqwest::Client::new();
+
+    let request = AnthropicRequest {
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 5,
+        messages: vec![Message {
+            role: "user",
+            content: vec![ContentBlock::Text { text: "Hi" }],
+        }],
+    };
+
+    call_claude(&client, api_key.trim(), &request).await?;
+    Ok(())
+}
+
 /// Transcribe handwriting from a base64-encoded image using Claude.
 ///
 /// Two sequential API calls are made:

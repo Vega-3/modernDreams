@@ -119,6 +119,9 @@ export interface TranscriptionResult {
   english_transcript: string;
 }
 
+export const verifyApiKey = (apiKey: string) =>
+  invoke<void>('verify_api_key', { apiKey });
+
 export const transcribeHandwritingClaude = (
   imageBase64: string,
   imageMediaType: string,

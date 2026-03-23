@@ -41,7 +41,11 @@ export const useDreamStore = create<DreamState>((set) => ({
     try {
       const dream = await api.createDream(input);
       set((state) => ({
-        dreams: [dream, ...state.dreams],
+        dreams: [...state.dreams, dream].sort((a, b) => {
+          const dateDiff = b.dream_date.localeCompare(a.dream_date);
+          if (dateDiff !== 0) return dateDiff;
+          return b.created_at.localeCompare(a.created_at);
+        }),
         isLoading: false,
       }));
       return dream;

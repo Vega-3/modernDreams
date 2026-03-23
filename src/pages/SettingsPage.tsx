@@ -1,19 +1,37 @@
 import { useState } from 'react';
-import { FolderOpen, Upload, Check, KeyRound } from 'lucide-react';
+import { FolderOpen, Upload, Check, KeyRound, Loader2, X, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { exportToObsidian } from '@/lib/tauri';
+import { exportToObsidian, verifyApiKey } from '@/lib/tauri';
+import { friendlyApiError } from '@/lib/apiError';
 
 export function SettingsPage() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
   const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [testError, setTestError] = useState('');
 
   const saveApiKey = () => {
     localStorage.setItem('anthropic_api_key', apiKey.trim());
     setApiKeySaved(true);
+    setTestState('idle');
     setTimeout(() => setApiKeySaved(false), 2000);
+  };
+
+  const handleTestKey = async () => {
+    const key = apiKey.trim();
+    if (!key) return;
+    setTestState('testing');
+    setTestError('');
+    try {
+      await verifyApiKey(key);
+      setTestState('ok');
+    } catch (err) {
+      setTestState('error');
+      setTestError(friendlyApiError(String(err)));
+    }
   };
 
   const [isExporting, setIsExporting] = useState(false);
@@ -55,8 +73,8 @@ export function SettingsPage() {
             Anthropic API Key
           </CardTitle>
           <CardDescription>
-            Required for AI-powered handwriting transcription. Your key is stored locally in the
-            browser and is only sent directly to Anthropic's API.
+            Required for AI-powered handwriting transcription. Your key is stored locally and only
+            sent directly to Anthropic's API.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -65,7 +83,10 @@ export function SettingsPage() {
               type="password"
               placeholder="sk-ant-api03-..."
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                setTestState('idle');
+              }}
               onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
             />
             <Button onClick={saveApiKey} disabled={!apiKey.trim()}>
@@ -78,10 +99,50 @@ export function SettingsPage() {
                 'Save'
               )}
             </Button>
+            <Button
+              variant="outline"
+              onClick={handleTestKey}
+              disabled={!apiKey.trim() || testState === 'testing'}
+            >
+              {testState === 'testing' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Test'
+              )}
+            </Button>
           </div>
+
+          {/* Test result feedback */}
+          {testState === 'ok' && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <Check className="h-4 w-4" />
+              API key is valid and working.
+            </div>
+          )}
+          {testState === 'error' && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+                <X className="h-4 w-4" />
+                API key test failed
+              </div>
+              <p className="text-sm text-destructive/80">{testError}</p>
+            </div>
+          )}
+
+          <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-3 flex gap-2 text-sm text-amber-700 dark:text-amber-400">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-medium">API credits are separate from Claude.ai subscriptions</p>
+              <p>
+                A Claude.ai Pro/Team plan does not include API access. You need to add credits at{' '}
+                <span className="font-medium">console.anthropic.com/settings/billing</span> to use
+                this feature.
+              </p>
+            </div>
+          </div>
+
           <p className="text-xs text-muted-foreground">
-            Get your API key at{' '}
-            <span className="font-medium">console.anthropic.com</span>. The key is used for
+            Get your API key at <span className="font-medium">console.anthropic.com</span>. Used for
             handwriting transcription (Scan Handwriting button in the Journal).
           </p>
         </CardContent>
