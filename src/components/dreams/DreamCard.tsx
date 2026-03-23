@@ -120,15 +120,17 @@ export function DreamCard({ dream }: DreamCardProps) {
         </CardContent>
       </Card>
 
-      <DreamViewer
-        dream={dream}
-        open={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        onEdit={() => {
-          setViewerOpen(false);
-          handleEdit();
-        }}
-      />
+      {viewerOpen && (
+        <DreamViewer
+          dream={dream}
+          open={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          onEdit={() => {
+            setViewerOpen(false);
+            handleEdit();
+          }}
+        />
+      )}
     </>
   );
 }
