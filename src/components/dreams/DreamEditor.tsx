@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { TagPicker } from '@/components/tags/TagPicker';
 import { TagHighlight } from './TagHighlightExtension';
-import type { TagRef } from './TagHighlightExtension';
+import type { TagRef, MarkSource } from './TagHighlightExtension';
 import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -88,6 +88,8 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
     if (!node.isText) return;
     node.marks.forEach((mark) => {
       if (mark.type.name === 'tagHighlight' && node.text) {
+        // Skip auto-applied marks — only persist manual associations
+        if ((mark.attrs.source as MarkSource) === 'auto') return;
         const word = node.text.trim();
         if (!word) return;
         const tags: TagRef[] = mark.attrs.tags ?? [];
@@ -243,9 +245,34 @@ export function DreamEditor() {
           tag.aliases.some((alias) => text.includes(alias.toLowerCase()))
         )
     );
-    if (matched.length > 0) {
-      setSelectedTags([...selectedTags, ...matched]);
-    }
+    if (matched.length === 0) return;
+
+    setSelectedTags([...selectedTags, ...matched]);
+
+    // Apply auto-highlight marks to each occurrence of the matched words
+    const doc = editor.state.doc;
+    const { tr } = editor.state;
+    const markType = editor.schema.marks.tagHighlight;
+
+    matched.forEach((tag) => {
+      const searchTerms = [tag.name, ...tag.aliases].map((s) => s.toLowerCase());
+      doc.descendants((node, pos) => {
+        if (!node.isText || !node.text) return;
+        const lower = node.text.toLowerCase();
+        searchTerms.forEach((term) => {
+          let idx = lower.indexOf(term);
+          while (idx !== -1) {
+            const from = pos + idx;
+            const to = from + term.length;
+            const autoMark = markType.create({ tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }], source: 'auto' });
+            tr.addMark(from, to, autoMark);
+            idx = lower.indexOf(term, idx + 1);
+          }
+        });
+      });
+    });
+
+    editor.view.dispatch(tr);
   };
 
   const handleGrammarFix = () => {

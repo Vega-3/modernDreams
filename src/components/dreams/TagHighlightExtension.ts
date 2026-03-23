@@ -6,6 +6,8 @@ export interface TagRef {
   tagName: string;
 }
 
+export type MarkSource = 'manual' | 'auto';
+
 /**
  * A mark that stores an array of tags on a text range.
  * Uses a JSON-encoded `data-tags` attribute so multiple tags can share
@@ -44,6 +46,11 @@ export const TagHighlight = Mark.create({
         renderHTML: (attributes) => ({
           'data-tags': JSON.stringify(attributes.tags ?? []),
         }),
+      },
+      source: {
+        default: 'manual' as MarkSource,
+        parseHTML: (element) => (element.getAttribute('data-source') as MarkSource) ?? 'manual',
+        renderHTML: (attributes) => ({ 'data-source': attributes.source ?? 'manual' }),
       },
     };
   },
