@@ -15,7 +15,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TagBadge } from '@/components/tags/TagBadge';
 import { useTagStore } from '@/stores/tagStore';
 import { getCategoryColor } from '@/lib/utils';
-import type { Tag, TagCategory } from '@/lib/tauri';
+import { getTagWordAssociations } from '@/lib/tauri';
+import type { Tag, TagCategory, TagWordUsage } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
   { id: 'location', label: 'Locations' },
@@ -52,6 +53,8 @@ export function TagsPage() {
   const [description, setDescription] = useState('');
   // Comma-separated in the UI; converted to/from string[] on save/load
   const [aliases, setAliases] = useState('');
+  const [wordAssociations, setWordAssociations] = useState<TagWordUsage[]>([]);
+  const [loadingAssociations, setLoadingAssociations] = useState(false);
 
   useEffect(() => {
     fetchTags();
@@ -67,7 +70,7 @@ export function TagsPage() {
     );
   });
 
-  const openEditor = (tag?: Tag) => {
+  const openEditor = async (tag?: Tag) => {
     if (tag) {
       setEditingTag(tag);
       setName(tag.name);
@@ -75,6 +78,16 @@ export function TagsPage() {
       setColor(tag.color);
       setDescription(tag.description || '');
       setAliases(tag.aliases.join(', '));
+      // Fetch word associations for this tag
+      setLoadingAssociations(true);
+      try {
+        const assocs = await getTagWordAssociations(tag.id);
+        setWordAssociations(assocs);
+      } catch {
+        setWordAssociations([]);
+      } finally {
+        setLoadingAssociations(false);
+      }
     } else {
       setEditingTag(null);
       setName('');
@@ -82,6 +95,7 @@ export function TagsPage() {
       setColor(getCategoryColor(activeCategory));
       setDescription('');
       setAliases('');
+      setWordAssociations([]);
     }
     setIsEditorOpen(true);
   };
@@ -286,6 +300,40 @@ export function TagsPage() {
                 any of these words appear in the dream text.
               </p>
             </div>
+
+            {/* Associated words (only shown when editing an existing tag) */}
+            {editingTag && (
+              <div className="space-y-2 border-t pt-4">
+                <Label>Associated words in dreams</Label>
+                {loadingAssociations ? (
+                  <p className="text-xs text-muted-foreground">Loading...</p>
+                ) : wordAssociations.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No words tagged yet. Select text in the dream editor and click this tag to
+                    associate words.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {wordAssociations.map((assoc, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <span
+                          className="font-medium px-1.5 py-0.5 rounded"
+                          style={{
+                            backgroundColor: editingTag.color + '26',
+                            color: editingTag.color,
+                          }}
+                        >
+                          {assoc.word}
+                        </span>
+                        <span className="text-muted-foreground truncate ml-2">
+                          {assoc.dream_title}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter>

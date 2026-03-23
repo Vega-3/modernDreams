@@ -25,6 +25,7 @@ pub fn run() {
             commands::tags::create_tag,
             commands::tags::update_tag,
             commands::tags::delete_tag,
+            commands::tags::get_tag_word_associations,
             commands::search::search_dreams,
             commands::obsidian::export_to_obsidian,
             commands::obsidian::get_obsidian_path,

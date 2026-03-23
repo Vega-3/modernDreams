@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
@@ -33,11 +34,13 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { TagPicker } from '@/components/tags/TagPicker';
+import { TagHighlight } from './TagHighlightExtension';
 import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
-import type { Tag } from '@/lib/tauri';
+import type { Tag, WordTagAssociation } from '@/lib/tauri';
+import type { Editor } from '@tiptap/core';
 
 // Grammar fixes applied only to text nodes between HTML tags.
 // Only unambiguous single-solution corrections are applied.
@@ -78,6 +81,26 @@ function applyGrammarFixes(html: string): string {
   });
 }
 
+function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
+  const associations: WordTagAssociation[] = [];
+  editor.state.doc.descendants((node) => {
+    if (!node.isText) return;
+    node.marks.forEach((mark) => {
+      if (mark.type.name === 'tagHighlight' && mark.attrs.tagId && node.text) {
+        associations.push({ tag_id: mark.attrs.tagId, word: node.text.trim() });
+      }
+    });
+  });
+  // Deduplicate by tag_id + word
+  const seen = new Set<string>();
+  return associations.filter(({ tag_id, word }) => {
+    const key = `${tag_id}:${word.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function DreamEditor() {
   const { editorOpen, editingDreamId, closeEditor } = useUIStore();
   const { dreams, createDream, updateDream } = useDreamStore();
@@ -90,6 +113,7 @@ export function DreamEditor() {
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [clarityRating, setClarityRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [wakingLifeContext, setWakingLifeContext] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   const editingDream = editingDreamId ? dreams.find((d) => d.id === editingDreamId) : null;
@@ -107,6 +131,7 @@ export function DreamEditor() {
         inline: false,
         allowBase64: true,
       }),
+      TagHighlight,
     ],
     content: '',
     editorProps: {
@@ -125,6 +150,7 @@ export function DreamEditor() {
       setMoodRating(editingDream.mood_rating);
       setClarityRating(editingDream.clarity_rating);
       setSelectedTags(editingDream.tags);
+      setWakingLifeContext(editingDream.waking_life_context || '');
       editor.commands.setContent(editingDream.content_html);
     } else if (!editingDreamId && editor) {
       setTitle('');
@@ -133,6 +159,7 @@ export function DreamEditor() {
       setMoodRating(null);
       setClarityRating(null);
       setSelectedTags([]);
+      setWakingLifeContext('');
       editor.commands.setContent('');
     }
   }, [editingDream, editingDreamId, editor]);
@@ -144,6 +171,7 @@ export function DreamEditor() {
     try {
       const contentHtml = editor.getHTML();
       const contentPlain = editor.getText();
+      const wordTagAssociations = extractWordTagAssociations(editor);
 
       if (editingDreamId) {
         await updateDream({
@@ -155,7 +183,9 @@ export function DreamEditor() {
           is_lucid: isLucid,
           mood_rating: moodRating,
           clarity_rating: clarityRating,
+          waking_life_context: wakingLifeContext.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
+          word_tag_associations: wordTagAssociations,
         });
       } else {
         await createDream({
@@ -166,7 +196,9 @@ export function DreamEditor() {
           is_lucid: isLucid,
           mood_rating: moodRating,
           clarity_rating: clarityRating,
+          waking_life_context: wakingLifeContext.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
+          word_tag_associations: wordTagAssociations,
         });
       }
       closeEditor();
@@ -292,9 +324,28 @@ export function DreamEditor() {
             <TagPicker selectedTags={selectedTags} onTagsChange={setSelectedTags} />
           </div>
 
+          {/* Waking Life Context */}
+          <div className="space-y-2">
+            <Label htmlFor="waking-context">Waking Life Context</Label>
+            <Textarea
+              id="waking-context"
+              value={wakingLifeContext}
+              onChange={(e) => setWakingLifeContext(e.target.value)}
+              placeholder="What was happening in your waking life around this time? (optional)"
+              className="min-h-[80px] resize-none"
+            />
+          </div>
+
           {/* Editor toolbar */}
           <div className="space-y-2">
-            <Label>Content</Label>
+            <div className="flex items-center justify-between">
+              <Label>Content</Label>
+              {selectedTags.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Select text to tag individual words
+                </p>
+              )}
+            </div>
             <div className="border rounded-lg">
               <div className="flex items-center gap-1 p-2 border-b bg-muted/50 flex-wrap">
                 <ToolbarButton onClick={handleGrammarFix} isActive={false}>
@@ -361,7 +412,53 @@ export function DreamEditor() {
                   onChange={handleImageFile}
                 />
               </div>
-              <div className="p-4">
+              <div className="p-4 relative">
+                {editor && selectedTags.length > 0 && (
+                  <BubbleMenu
+                    editor={editor}
+                    tippyOptions={{ duration: 100, placement: 'top' }}
+                    shouldShow={({ from, to }) => from !== to}
+                  >
+                    <div className="flex gap-1 bg-popover border rounded-md shadow-lg p-1.5 flex-wrap max-w-xs">
+                      {selectedTags.map((tag) => {
+                        const isActive = editor.isActive('tagHighlight', { tagId: tag.id });
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              if (isActive) {
+                                editor.chain().focus().unsetMark('tagHighlight').run();
+                              } else {
+                                editor
+                                  .chain()
+                                  .focus()
+                                  .setMark('tagHighlight', {
+                                    tagId: tag.id,
+                                    tagColor: tag.color,
+                                    tagName: tag.name,
+                                  })
+                                  .run();
+                              }
+                            }}
+                            className={cn(
+                              'px-2 py-0.5 rounded text-xs font-medium transition-all border',
+                              isActive && 'ring-2 ring-offset-1 ring-current'
+                            )}
+                            style={{
+                              backgroundColor: tag.color + '26',
+                              color: tag.color,
+                              borderColor: tag.color,
+                            }}
+                          >
+                            {tag.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </BubbleMenu>
+                )}
                 <EditorContent editor={editor} />
               </div>
             </div>

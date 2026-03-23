@@ -14,7 +14,8 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             is_lucid BOOLEAN DEFAULT FALSE,
             mood_rating INTEGER,
-            clarity_rating INTEGER
+            clarity_rating INTEGER,
+            waking_life_context TEXT
         );
 
         CREATE TABLE IF NOT EXISTS tags (
@@ -40,6 +41,17 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
         CREATE INDEX IF NOT EXISTS idx_dream_tags_dream ON dream_tags(dream_id);
         CREATE INDEX IF NOT EXISTS idx_dream_tags_tag ON dream_tags(tag_id);
+
+        -- Word-level tag associations (inline highlights)
+        CREATE TABLE IF NOT EXISTS word_tag_associations (
+            id TEXT PRIMARY KEY,
+            dream_id TEXT NOT NULL REFERENCES dreams(id) ON DELETE CASCADE,
+            tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+            word TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_wta_dream ON word_tag_associations(dream_id);
+        CREATE INDEX IF NOT EXISTS idx_wta_tag ON word_tag_associations(tag_id);
 
         -- Full-text search virtual table
         CREATE VIRTUAL TABLE IF NOT EXISTS dreams_fts USING fts5(
@@ -83,6 +95,13 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     // Silently ignored if the column already exists (fresh DB has it from CREATE TABLE).
     let _ = conn.execute(
         "ALTER TABLE tags ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'",
+        [],
+    );
+
+    // Additive migration: add waking_life_context column to existing databases.
+    // Silently ignored if the column already exists (fresh DB has it from CREATE TABLE).
+    let _ = conn.execute(
+        "ALTER TABLE dreams ADD COLUMN waking_life_context TEXT",
         [],
     );
 

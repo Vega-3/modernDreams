@@ -12,8 +12,23 @@ pub struct Dream {
     pub is_lucid: bool,
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
+    pub waking_life_context: Option<String>,
     #[serde(default)]
     pub tags: Vec<Tag>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordTagAssociation {
+    pub tag_id: String,
+    pub word: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagWordUsage {
+    pub dream_id: String,
+    pub dream_title: String,
+    pub dream_date: String,
+    pub word: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,7 +40,10 @@ pub struct CreateDreamInput {
     pub is_lucid: bool,
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
+    pub waking_life_context: Option<String>,
     pub tag_ids: Vec<String>,
+    #[serde(default)]
+    pub word_tag_associations: Vec<WordTagAssociation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +56,10 @@ pub struct UpdateDreamInput {
     pub is_lucid: bool,
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
+    pub waking_life_context: Option<String>,
     pub tag_ids: Vec<String>,
+    #[serde(default)]
+    pub word_tag_associations: Vec<WordTagAssociation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

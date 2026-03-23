@@ -154,6 +154,7 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
         mood_rating: currentForm.moodRating,
         clarity_rating: currentForm.clarityRating,
         tag_ids: currentForm.tags.map((t) => t.id),
+        word_tag_associations: [],
       });
 
       setSavedCount((prev) => prev + 1);
@@ -186,6 +187,7 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
           mood_rating: form.moodRating,
           clarity_rating: form.clarityRating,
           tag_ids: form.tags.map((t) => t.id),
+          word_tag_associations: [],
         });
       }
 

@@ -1,5 +1,5 @@
 use crate::db::DbConnection;
-use crate::models::{CreateTagInput, Tag, TagCategory, UpdateTagInput};
+use crate::models::{CreateTagInput, Tag, TagCategory, TagWordUsage, UpdateTagInput};
 use rusqlite::{params, OptionalExtension};
 use tauri::State;
 use uuid::Uuid;
@@ -183,4 +183,42 @@ pub fn delete_tag(id: String, db: State<'_, DbConnection>) -> Result<(), String>
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_tag_word_associations(
+    tag_id: String,
+    db: State<'_, DbConnection>,
+) -> Result<Vec<TagWordUsage>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT wta.word, d.id, d.title, d.dream_date
+            FROM word_tag_associations wta
+            JOIN dreams d ON d.id = wta.dream_id
+            WHERE wta.tag_id = ?1
+            ORDER BY d.dream_date DESC, wta.word ASC
+            "#,
+        )
+        .map_err(|e| e.to_string())?;
+
+    let iter = stmt
+        .query_map(params![tag_id], |row| {
+            Ok(TagWordUsage {
+                word: row.get(0)?,
+                dream_id: row.get(1)?,
+                dream_title: row.get(2)?,
+                dream_date: row.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut result = Vec::new();
+    for item in iter {
+        result.push(item.map_err(|e| e.to_string())?);
+    }
+
+    Ok(result)
 }

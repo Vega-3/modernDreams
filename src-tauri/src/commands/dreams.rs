@@ -13,7 +13,8 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
         .prepare(
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
-                   created_at, updated_at, is_lucid, mood_rating, clarity_rating
+                   created_at, updated_at, is_lucid, mood_rating, clarity_rating,
+                   waking_life_context
             FROM dreams
             ORDER BY dream_date DESC, created_at DESC
             "#,
@@ -33,6 +34,7 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
+                waking_life_context: row.get(10)?,
                 tags: Vec::new(),
             })
         })
@@ -56,7 +58,8 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
         .prepare(
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
-                   created_at, updated_at, is_lucid, mood_rating, clarity_rating
+                   created_at, updated_at, is_lucid, mood_rating, clarity_rating,
+                   waking_life_context
             FROM dreams
             WHERE id = ?1
             "#,
@@ -76,6 +79,7 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
+                waking_life_context: row.get(10)?,
                 tags: Vec::new(),
             })
         })
@@ -104,8 +108,9 @@ pub fn create_dream(
     conn.execute(
         r#"
         INSERT INTO dreams (id, title, content_html, content_plain, dream_date,
-                           created_at, updated_at, is_lucid, mood_rating, clarity_rating)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                           created_at, updated_at, is_lucid, mood_rating, clarity_rating,
+                           waking_life_context)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
         "#,
         params![
             id,
@@ -118,6 +123,7 @@ pub fn create_dream(
             input.is_lucid,
             input.mood_rating,
             input.clarity_rating,
+            input.waking_life_context,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -127,6 +133,16 @@ pub fn create_dream(
         conn.execute(
             "INSERT INTO dream_tags (dream_id, tag_id) VALUES (?1, ?2)",
             params![id, tag_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Add word-level tag associations
+    for assoc in &input.word_tag_associations {
+        let assoc_id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word) VALUES (?1, ?2, ?3, ?4)",
+            params![assoc_id, id, assoc.tag_id, assoc.word],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -144,6 +160,7 @@ pub fn create_dream(
         is_lucid: input.is_lucid,
         mood_rating: input.mood_rating,
         clarity_rating: input.clarity_rating,
+        waking_life_context: input.waking_life_context,
         tags,
     })
 }
@@ -161,7 +178,8 @@ pub fn update_dream(
         r#"
         UPDATE dreams
         SET title = ?2, content_html = ?3, content_plain = ?4, dream_date = ?5,
-            updated_at = ?6, is_lucid = ?7, mood_rating = ?8, clarity_rating = ?9
+            updated_at = ?6, is_lucid = ?7, mood_rating = ?8, clarity_rating = ?9,
+            waking_life_context = ?10
         WHERE id = ?1
         "#,
         params![
@@ -174,6 +192,7 @@ pub fn update_dream(
             input.is_lucid,
             input.mood_rating,
             input.clarity_rating,
+            input.waking_life_context,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -193,6 +212,22 @@ pub fn update_dream(
         .map_err(|e| e.to_string())?;
     }
 
+    // Update word-level tag associations
+    conn.execute(
+        "DELETE FROM word_tag_associations WHERE dream_id = ?1",
+        params![input.id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    for assoc in &input.word_tag_associations {
+        let assoc_id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word) VALUES (?1, ?2, ?3, ?4)",
+            params![assoc_id, input.id, assoc.tag_id, assoc.word],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
     let tags = get_dream_tags(&conn, &input.id)?;
 
     // Fetch the updated dream
@@ -200,7 +235,8 @@ pub fn update_dream(
         .prepare(
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
-                   created_at, updated_at, is_lucid, mood_rating, clarity_rating
+                   created_at, updated_at, is_lucid, mood_rating, clarity_rating,
+                   waking_life_context
             FROM dreams
             WHERE id = ?1
             "#,
@@ -220,6 +256,7 @@ pub fn update_dream(
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
+                waking_life_context: row.get(10)?,
                 tags,
             })
         })

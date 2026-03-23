@@ -11,6 +11,7 @@ export interface Dream {
   is_lucid: boolean;
   mood_rating: number | null;
   clarity_rating: number | null;
+  waking_life_context?: string | null;
   tags: Tag[];
 }
 
@@ -26,6 +27,18 @@ export interface Tag {
 
 export type TagCategory = 'location' | 'person' | 'symbolic' | 'emotive' | 'custom';
 
+export interface WordTagAssociation {
+  tag_id: string;
+  word: string;
+}
+
+export interface TagWordUsage {
+  dream_id: string;
+  dream_title: string;
+  dream_date: string;
+  word: string;
+}
+
 export interface CreateDreamInput {
   title: string;
   content_html: string;
@@ -34,7 +47,9 @@ export interface CreateDreamInput {
   is_lucid: boolean;
   mood_rating: number | null;
   clarity_rating: number | null;
+  waking_life_context?: string | null;
   tag_ids: string[];
+  word_tag_associations: WordTagAssociation[];
 }
 
 export interface UpdateDreamInput extends CreateDreamInput {
@@ -84,6 +99,8 @@ export const getTag = (id: string) => invoke<Tag | null>('get_tag', { id });
 export const createTag = (input: CreateTagInput) => invoke<Tag>('create_tag', { input });
 export const updateTag = (input: UpdateTagInput) => invoke<Tag>('update_tag', { input });
 export const deleteTag = (id: string) => invoke<void>('delete_tag', { id });
+export const getTagWordAssociations = (tagId: string) =>
+  invoke<TagWordUsage[]>('get_tag_word_associations', { tagId });
 
 // Search commands
 export const searchDreams = (query: SearchQuery) => invoke<SearchResult>('search_dreams', { query });
