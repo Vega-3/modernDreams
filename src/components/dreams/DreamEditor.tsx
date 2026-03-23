@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { TagPicker } from '@/components/tags/TagPicker';
 import { TagHighlight } from './TagHighlightExtension';
+import type { TagRef } from './TagHighlightExtension';
 import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -86,8 +87,13 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
   editor.state.doc.descendants((node) => {
     if (!node.isText) return;
     node.marks.forEach((mark) => {
-      if (mark.type.name === 'tagHighlight' && mark.attrs.tagId && node.text) {
-        associations.push({ tag_id: mark.attrs.tagId, word: node.text.trim() });
+      if (mark.type.name === 'tagHighlight' && node.text) {
+        const word = node.text.trim();
+        if (!word) return;
+        const tags: TagRef[] = mark.attrs.tags ?? [];
+        tags.forEach(({ tagId }) => {
+          if (tagId) associations.push({ tag_id: tagId, word });
+        });
       }
     });
   });
@@ -420,26 +426,37 @@ export function DreamEditor() {
                     shouldShow={({ from, to }) => from !== to}
                   >
                     <div className="flex gap-1 bg-popover border rounded-md shadow-lg p-1.5 flex-wrap max-w-xs">
-                      {selectedTags.map((tag) => {
-                        const isActive = editor.isActive('tagHighlight', { tagId: tag.id });
+                      {[...selectedTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
+                        // Check if this tag is in the tags array of the active mark
+                        const activeMark = editor.state.selection.$from
+                          .marks()
+                          .find((m) => m.type.name === 'tagHighlight');
+                        const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
+                        const isActive = activeTags.some((t) => t.tagId === tag.id);
                         return (
                           <button
                             key={tag.id}
                             type="button"
                             onMouseDown={(e) => {
                               e.preventDefault();
+                              const { from, to } = editor.state.selection;
+                              const existingMark = editor.state.doc
+                                .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
+                                ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
+                                : null;
+                              const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
+
+                              let newTags: TagRef[];
                               if (isActive) {
+                                newTags = currentTags.filter((t) => t.tagId !== tag.id);
+                              } else {
+                                newTags = [...currentTags, { tagId: tag.id, tagColor: tag.color, tagName: tag.name }];
+                              }
+
+                              if (newTags.length === 0) {
                                 editor.chain().focus().unsetMark('tagHighlight').run();
                               } else {
-                                editor
-                                  .chain()
-                                  .focus()
-                                  .setMark('tagHighlight', {
-                                    tagId: tag.id,
-                                    tagColor: tag.color,
-                                    tagName: tag.name,
-                                  })
-                                  .run();
+                                editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
                               }
                             }}
                             className={cn(
