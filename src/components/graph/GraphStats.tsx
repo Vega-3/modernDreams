@@ -32,10 +32,9 @@ export function GraphStats({ startDate, endDate }: GraphStatsProps) {
     }
   };
 
-  // ── Collapsed: just a vertical toggle strip ──────────────────────────────
   if (!isOpen) {
     return (
-      <div className="flex flex-col items-center pt-1">
+      <div className="w-9 shrink-0 flex flex-col items-center pt-1">
         <Button
           variant="outline"
           size="icon"
@@ -49,7 +48,6 @@ export function GraphStats({ startDate, endDate }: GraphStatsProps) {
     );
   }
 
-  // ── Expanded panel ────────────────────────────────────────────────────────
   return (
     <Card className="w-72 shrink-0 flex flex-col overflow-hidden">
       {/* Header */}
