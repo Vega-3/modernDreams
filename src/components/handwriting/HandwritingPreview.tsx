@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 import { Check, ChevronLeft, ChevronRight, Save, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -16,9 +18,37 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { TagPicker } from '@/components/tags/TagPicker';
+import { TagHighlight } from '@/components/dreams/TagHighlightExtension';
+import type { TagRef } from '@/components/dreams/TagHighlightExtension';
+import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useTagStore } from '@/stores/tagStore';
-import type { Tag } from '@/lib/tauri';
+import type { Tag, WordTagAssociation } from '@/lib/tauri';
+
+function extractWordTagAssociations(editor: ReturnType<typeof useEditor>): WordTagAssociation[] {
+  if (!editor) return [];
+  const associations: WordTagAssociation[] = [];
+  editor.state.doc.descendants((node) => {
+    if (!node.isText) return;
+    node.marks.forEach((mark) => {
+      if (mark.type.name === 'tagHighlight' && node.text) {
+        const word = node.text.trim();
+        if (!word) return;
+        const tags: TagRef[] = mark.attrs.tags ?? [];
+        tags.forEach(({ tagId }) => {
+          if (tagId) associations.push({ tag_id: tagId, word });
+        });
+      }
+    });
+  });
+  const seen = new Set<string>();
+  return associations.filter(({ tag_id, word }) => {
+    const key = `${tag_id}:${word.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 interface RecognizedDream {
   rawTranscript: string;
@@ -93,15 +123,35 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   const { createDream } = useDreamStore();
   const { tags: allTags } = useTagStore();
 
+  const editor = useEditor({
+    extensions: [StarterKit, TagHighlight],
+    content: '',
+    editorProps: {
+      attributes: { class: 'tiptap min-h-[180px] p-3 focus:outline-none text-sm' },
+    },
+  });
+
   // Reinitialise state whenever the dialog opens with a fresh set of recognised dreams
   useEffect(() => {
     if (open && recognizedDreams.length > 0) {
-      setFormData(buildFormData(recognizedDreams, allTags));
+      const initialForms = buildFormData(recognizedDreams, allTags);
+      setFormData(initialForms);
       setCurrentIndex(0);
       setSavedCount(0);
+      editor?.commands.setContent(`<p>${(initialForms[0]?.content ?? '').replace(/\n/g, '</p><p>')}</p>`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, recognizedDreams]);
+
+  // Sync editor content when navigating between dreams
+  useEffect(() => {
+    if (!editor || formData.length === 0) return;
+    const form = formData[currentIndex];
+    if (form) {
+      editor.commands.setContent(`<p>${form.content.replace(/\n/g, '</p><p>')}</p>`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex]);
 
   const currentDream = recognizedDreams[currentIndex];
   const resolvedFormData =
@@ -130,6 +180,7 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
       title: generateTitle(content),
       tags: newTags,
     });
+    editor?.commands.setContent(`<p>${content.replace(/\n/g, '</p><p>')}</p>`);
   };
 
   const handlePrevious = () => {
@@ -143,18 +194,22 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   const handleSaveCurrent = async () => {
     if (!currentForm || !currentForm.title.trim() || !currentForm.content.trim()) return;
 
+    const contentHtml = editor ? editor.getHTML() : `<p>${currentForm.content.replace(/\n/g, '</p><p>')}</p>`;
+    const contentPlain = editor ? editor.getText() : currentForm.content;
+    const wordTagAssociations = extractWordTagAssociations(editor);
+
     setIsSaving(true);
     try {
       await createDream({
         title: currentForm.title.trim(),
-        content_html: `<p>${currentForm.content.replace(/\n/g, '</p><p>')}</p>`,
-        content_plain: currentForm.content,
+        content_html: contentHtml,
+        content_plain: contentPlain,
         dream_date: currentForm.dreamDate,
         is_lucid: currentForm.isLucid,
         mood_rating: currentForm.moodRating,
         clarity_rating: currentForm.clarityRating,
         tag_ids: currentForm.tags.map((t) => t.id),
-        word_tag_associations: [],
+        word_tag_associations: wordTagAssociations,
       });
 
       setSavedCount((prev) => prev + 1);
@@ -187,7 +242,7 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
           mood_rating: form.moodRating,
           clarity_rating: form.clarityRating,
           tag_ids: form.tags.map((t) => t.id),
-          word_tag_associations: [],
+          word_tag_associations: i === currentIndex ? extractWordTagAssociations(editor) : [],
         });
       }
 
@@ -330,16 +385,68 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
             </div>
           )}
 
-          {/* Content textarea */}
+          {/* Content editor */}
           <div className="space-y-2 mt-4">
-            <Label htmlFor="content">Content (edit as needed)</Label>
-            <textarea
-              id="content"
-              value={currentForm.content}
-              onChange={(e) => updateCurrentForm({ content: e.target.value })}
-              className="w-full h-48 p-3 rounded-md border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Transcribed dream content..."
-            />
+            <Label>Content (edit as needed)</Label>
+            <div className="rounded-md border bg-background relative">
+              {editor && currentForm.tags.length > 0 && (
+                <BubbleMenu
+                  editor={editor}
+                  tippyOptions={{ duration: 100, placement: 'top' }}
+                  shouldShow={({ from, to }) => from !== to}
+                >
+                  <div className="flex gap-1 bg-popover border rounded-md shadow-lg p-1.5 flex-wrap max-w-xs">
+                    {[...currentForm.tags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
+                      const activeMark = editor.state.selection.$from
+                        .marks()
+                        .find((m) => m.type.name === 'tagHighlight');
+                      const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
+                      const isActive = activeTags.some((t) => t.tagId === tag.id);
+                      return (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const { from, to } = editor.state.selection;
+                            const existingMark = editor.state.doc
+                              .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
+                              ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
+                              : null;
+                            const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
+                            const newTags = isActive
+                              ? currentTags.filter((t) => t.tagId !== tag.id)
+                              : [...currentTags, { tagId: tag.id, tagColor: tag.color, tagName: tag.name }];
+                            if (newTags.length === 0) {
+                              editor.chain().focus().unsetMark('tagHighlight').run();
+                            } else {
+                              editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
+                            }
+                          }}
+                          className={cn(
+                            'px-2 py-0.5 rounded text-xs font-medium transition-all border',
+                            isActive && 'ring-2 ring-offset-1 ring-current'
+                          )}
+                          style={{
+                            backgroundColor: tag.color + '26',
+                            color: tag.color,
+                            borderColor: tag.color,
+                          }}
+                        >
+                          {tag.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </BubbleMenu>
+              )}
+              <EditorContent editor={editor} />
+              {currentForm.tags.length > 0 && (
+                <p className="px-3 pb-2 text-xs text-muted-foreground">
+                  Select text to tag individual words
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Mood and Clarity sliders */}
