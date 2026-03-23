@@ -91,6 +91,7 @@ pub fn export_to_obsidian(db: State<'_, DbConnection>) -> Result<ExportResult, S
                 color: row.get(3)?,
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
+                aliases: vec![],
             })
         })
         .map_err(|e| e.to_string())?;
@@ -339,6 +340,7 @@ fn get_dream_tags(conn: &rusqlite::Connection, dream_id: &str) -> Result<Vec<Tag
                 color: row.get(3)?,
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
+                aliases: vec![],
             })
         })
         .map_err(|e| e.to_string())?;

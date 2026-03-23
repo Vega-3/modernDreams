@@ -87,10 +87,12 @@ fn build_graph_input(
             )
             .map_err(|e| e.to_string())?;
 
-        stmt.query_map(params![start_date, end_date], |row| row.get(0))
+        let ids: Vec<String> = stmt
+            .query_map(params![start_date, end_date], |row| row.get(0))
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
-            .collect()
+            .collect();
+        ids
     };
 
     let dream_count = dream_ids.len() as u64;
