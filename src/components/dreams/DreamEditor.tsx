@@ -125,7 +125,11 @@ export function DreamEditor() {
   const [analysisNotes, setAnalysisNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const editingDream = editingDreamId ? dreams.find((d) => d.id === editingDreamId) : null;
+  // Intentionally NOT derived as a reactive variable — we only want to read the
+  // dream snapshot when editingDreamId changes (editor opens/switches), not every
+  // time the store updates after a save (which caused a double-load black-screen).
+  const getDreamSnapshot = () =>
+    editingDreamId ? dreams.find((d) => d.id === editingDreamId) ?? null : null;
 
   const editor = useEditor({
     extensions: [
@@ -150,19 +154,27 @@ export function DreamEditor() {
     },
   });
 
-  // Load existing dream data when editing
+  // Load existing dream data when the editor opens for a specific dream.
+  // Depends only on editingDreamId (and editor), NOT on the dream object itself —
+  // so that a store update after save does NOT re-trigger this effect and reload
+  // the full content_html (potentially containing large base64 images) back into
+  // the editor just before it is cleared, which was causing the black-screen crash.
   useEffect(() => {
-    if (editingDream && editor) {
-      setTitle(editingDream.title);
-      setDreamDate(editingDream.dream_date);
-      setIsLucid(editingDream.is_lucid);
-      setMoodRating(editingDream.mood_rating);
-      setClarityRating(editingDream.clarity_rating);
-      setSelectedTags(editingDream.tags);
-      setWakingLifeContext(editingDream.waking_life_context || '');
-      setAnalysisNotes(editingDream.analysis_notes || '');
-      editor.commands.setContent(editingDream.content_html);
-    } else if (!editingDreamId && editor) {
+    if (!editor) return;
+    if (editingDreamId) {
+      const dream = getDreamSnapshot();
+      if (dream) {
+        setTitle(dream.title);
+        setDreamDate(dream.dream_date);
+        setIsLucid(dream.is_lucid);
+        setMoodRating(dream.mood_rating);
+        setClarityRating(dream.clarity_rating);
+        setSelectedTags(dream.tags);
+        setWakingLifeContext(dream.waking_life_context || '');
+        setAnalysisNotes(dream.analysis_notes || '');
+        editor.commands.setContent(dream.content_html);
+      }
+    } else {
       setTitle('');
       setDreamDate(format(new Date(), 'yyyy-MM-dd'));
       setIsLucid(false);
@@ -173,7 +185,8 @@ export function DreamEditor() {
       setAnalysisNotes('');
       editor.commands.setContent('');
     }
-  }, [editingDream, editingDreamId, editor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingDreamId, editor]);
 
   const handleSave = async () => {
     if (!editor || !title.trim()) return;
