@@ -5,8 +5,11 @@ import { HandwritingPreview } from '@/components/handwriting/HandwritingPreview'
 import { useUIStore } from '@/stores/uiStore';
 import { useDreamStore } from '@/stores/dreamStore';
 
+
+
 export function JournalPage() {
   const {
+    editorOpen,
     handwritingUploadOpen,
     closeHandwritingUpload,
     handwritingPreviewOpen,
@@ -40,7 +43,7 @@ export function JournalPage() {
   return (
     <>
       <DreamList />
-      <DreamEditor />
+      {editorOpen && <DreamEditor />}
       <HandwritingUpload
         open={handwritingUploadOpen}
         onClose={closeHandwritingUpload}
