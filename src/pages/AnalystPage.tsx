@@ -202,13 +202,13 @@ export function AnalystPage() {
     setStep('import-preview');
 
     try {
-      const allParsed: ParsedDream[] = [];
-      for (const file of files) {
-        const text = await file.text();
-        const parsed = await parseFileWithClaude(text, currentApiKey);
-        allParsed.push(...parsed);
-      }
-      setParsedDreams(allParsed);
+      const results = await Promise.all(
+        files.map(async (file) => {
+          const text = await file.text();
+          return parseFileWithClaude(text, currentApiKey);
+        }),
+      );
+      setParsedDreams(results.flat());
     } catch (err) {
       setParseError(String(err));
     } finally {

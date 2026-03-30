@@ -79,7 +79,6 @@ pub fn import_client_dreams(
 ) -> Result<u32, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let now = Utc::now().to_rfc3339();
-    let mut count: u32 = 0;
 
     for dream in &dreams {
         let id = Uuid::new_v4().to_string();
@@ -101,9 +100,7 @@ pub fn import_client_dreams(
             ],
         )
         .map_err(|e| e.to_string())?;
-
-        count += 1;
     }
 
-    Ok(count)
+    Ok(dreams.len() as u32)
 }

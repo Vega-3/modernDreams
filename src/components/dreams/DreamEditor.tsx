@@ -257,17 +257,18 @@ export function DreamEditor() {
     return () => clearTimeout(id);
   }, [saveDraft, editorOpen, editingDreamId]);
 
-  // Save draft on editor content change
+  // Keep a stable ref so the editor.on('update') listener never needs to
+  // be re-registered when saveDraft's dependencies change.
+  const saveDraftRef = useRef(saveDraft);
+  useEffect(() => { saveDraftRef.current = saveDraft; }, [saveDraft]);
+
+  // Register the editor update handler exactly once per editor/session.
   useEffect(() => {
     if (!editor || !editorOpen || editingDreamId) return;
-    const handler = () => {
-      saveDraft();
-    };
+    const handler = () => saveDraftRef.current();
     editor.on('update', handler);
-    return () => {
-      editor.off('update', handler);
-    };
-  }, [editor, editorOpen, editingDreamId, saveDraft]);
+    return () => { editor.off('update', handler); };
+  }, [editor, editorOpen, editingDreamId]);
 
   const restoreDraft = () => {
     try {
