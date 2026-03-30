@@ -92,6 +92,8 @@ export const getDream = (id: string) => invoke<Dream | null>('get_dream', { id }
 export const createDream = (input: CreateDreamInput) => invoke<Dream>('create_dream', { input });
 export const updateDream = (input: UpdateDreamInput) => invoke<Dream>('update_dream', { input });
 export const deleteDream = (id: string) => invoke<void>('delete_dream', { id });
+export const addTagToDream = (dreamId: string, tagId: string) =>
+  invoke<void>('add_tag_to_dream', { dreamId, tagId });
 
 // Tag commands
 export const getTags = () => invoke<Tag[]>('get_tags');

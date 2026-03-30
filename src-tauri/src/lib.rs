@@ -20,6 +20,7 @@ pub fn run() {
             commands::dreams::create_dream,
             commands::dreams::update_dream,
             commands::dreams::delete_dream,
+            commands::dreams::add_tag_to_dream,
             commands::tags::get_tags,
             commands::tags::get_tag,
             commands::tags::create_tag,

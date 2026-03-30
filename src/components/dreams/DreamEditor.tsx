@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -41,6 +41,20 @@ import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
 import type { Tag, WordTagAssociation } from '@/lib/tauri';
 import type { Editor } from '@tiptap/core';
+
+const DRAFT_KEY = 'dreams_new_dream_draft';
+
+interface EditorDraft {
+  title: string;
+  dreamDate: string;
+  isLucid: boolean;
+  moodRating: number | null;
+  clarityRating: number | null;
+  selectedTagIds: string[];
+  wakingLifeContext: string;
+  contentHtml: string;
+  savedAt: string;
+}
 
 // Grammar fixes applied only to text nodes between HTML tags.
 // Only unambiguous single-solution corrections are applied.
@@ -101,6 +115,32 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
   });
 }
 
+/** Remove all tagHighlight marks for a given tagId from the editor. */
+function removeTagMarksFromEditor(editor: Editor, tagId: string) {
+  try {
+    const { tr, doc, schema } = editor.state;
+    const markType = schema.marks['tagHighlight'];
+    if (!markType) return;
+
+    let changed = false;
+    doc.nodesBetween(0, doc.content.size, (node, pos) => {
+      if (!node.isText) return;
+      node.marks.forEach((mark) => {
+        if (mark.type === markType && mark.attrs.tagId === tagId) {
+          tr.removeMark(pos, pos + node.nodeSize, markType);
+          changed = true;
+        }
+      });
+    });
+
+    if (changed) {
+      editor.view.dispatch(tr);
+    }
+  } catch (e) {
+    console.warn('Failed to remove tag marks:', e);
+  }
+}
+
 export function DreamEditor() {
   const { editorOpen, editingDreamId, closeEditor } = useUIStore();
   const { dreams, createDream, updateDream } = useDreamStore();
@@ -115,6 +155,8 @@ export function DreamEditor() {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [wakingLifeContext, setWakingLifeContext] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const draftRestoredRef = useRef(false);
 
   const editingDream = editingDreamId ? dreams.find((d) => d.id === editingDreamId) : null;
 
@@ -152,17 +194,108 @@ export function DreamEditor() {
       setSelectedTags(editingDream.tags);
       setWakingLifeContext(editingDream.waking_life_context || '');
       editor.commands.setContent(editingDream.content_html);
+      draftRestoredRef.current = true;
     } else if (!editingDreamId && editor) {
-      setTitle('');
-      setDreamDate(format(new Date(), 'yyyy-MM-dd'));
-      setIsLucid(false);
-      setMoodRating(null);
-      setClarityRating(null);
-      setSelectedTags([]);
-      setWakingLifeContext('');
-      editor.commands.setContent('');
+      // Check for a saved draft
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw && !draftRestoredRef.current) {
+          const draft: EditorDraft = JSON.parse(raw);
+          // Only restore if draft has meaningful content
+          if (draft.title || draft.contentHtml?.replace(/<[^>]+>/g, '').trim()) {
+            setShowDraftBanner(true);
+          }
+        }
+      } catch {
+        // ignore malformed draft
+      }
+      if (!draftRestoredRef.current) {
+        setTitle('');
+        setDreamDate(format(new Date(), 'yyyy-MM-dd'));
+        setIsLucid(false);
+        setMoodRating(null);
+        setClarityRating(null);
+        setSelectedTags([]);
+        setWakingLifeContext('');
+        editor.commands.setContent('');
+      }
     }
   }, [editingDream, editingDreamId, editor]);
+
+  // Reset draftRestoredRef when editor closes
+  useEffect(() => {
+    if (!editorOpen) {
+      draftRestoredRef.current = false;
+      setShowDraftBanner(false);
+    }
+  }, [editorOpen]);
+
+  // Auto-save draft to localStorage for new dreams (debounced via state)
+  const saveDraft = useCallback(() => {
+    if (!editorOpen || editingDreamId || !editor) return;
+    try {
+      const draft: EditorDraft = {
+        title,
+        dreamDate,
+        isLucid,
+        moodRating,
+        clarityRating,
+        selectedTagIds: selectedTags.map((t) => t.id),
+        wakingLifeContext,
+        contentHtml: editor.getHTML(),
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // ignore storage errors
+    }
+  }, [editorOpen, editingDreamId, editor, title, dreamDate, isLucid, moodRating, clarityRating, selectedTags, wakingLifeContext]);
+
+  useEffect(() => {
+    if (!editorOpen || editingDreamId) return;
+    const id = setTimeout(saveDraft, 1000);
+    return () => clearTimeout(id);
+  }, [saveDraft, editorOpen, editingDreamId]);
+
+  // Save draft on editor content change
+  useEffect(() => {
+    if (!editor || !editorOpen || editingDreamId) return;
+    const handler = () => {
+      saveDraft();
+    };
+    editor.on('update', handler);
+    return () => {
+      editor.off('update', handler);
+    };
+  }, [editor, editorOpen, editingDreamId, saveDraft]);
+
+  const restoreDraft = () => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw || !editor) return;
+      const draft: EditorDraft = JSON.parse(raw);
+      setTitle(draft.title || '');
+      setDreamDate(draft.dreamDate || format(new Date(), 'yyyy-MM-dd'));
+      setIsLucid(draft.isLucid || false);
+      setMoodRating(draft.moodRating ?? null);
+      setClarityRating(draft.clarityRating ?? null);
+      setWakingLifeContext(draft.wakingLifeContext || '');
+      editor.commands.setContent(draft.contentHtml || '');
+      // Restore tags by ID
+      const restoredTags = allTags.filter((t) => draft.selectedTagIds?.includes(t.id));
+      setSelectedTags(restoredTags);
+      draftRestoredRef.current = true;
+    } catch {
+      // ignore
+    }
+    setShowDraftBanner(false);
+  };
+
+  const discardDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setShowDraftBanner(false);
+    draftRestoredRef.current = true;
+  };
 
   const handleSave = async () => {
     if (!editor || !title.trim()) return;
@@ -200,6 +333,8 @@ export function DreamEditor() {
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
         });
+        // Clear draft on successful save
+        localStorage.removeItem(DRAFT_KEY);
       }
       closeEditor();
     } catch (error) {
@@ -243,6 +378,15 @@ export function DreamEditor() {
     editor.commands.setContent(fixed, false);
   };
 
+  /** Handle tag list changes, removing editor marks for any removed tags. */
+  const handleTagsChange = (newTags: Tag[]) => {
+    if (editor) {
+      const removedTags = selectedTags.filter((t) => !newTags.some((n) => n.id === t.id));
+      removedTags.forEach((tag) => removeTagMarksFromEditor(editor, tag.id));
+    }
+    setSelectedTags(newTags);
+  };
+
   const ToolbarButton = ({
     onClick,
     isActive,
@@ -269,6 +413,23 @@ export function DreamEditor() {
         <DialogHeader>
           <DialogTitle>{editingDreamId ? 'Edit Dream' : 'New Dream Entry'}</DialogTitle>
         </DialogHeader>
+
+        {/* Draft restore banner */}
+        {showDraftBanner && (
+          <div className="flex items-center justify-between rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+            <span className="text-amber-700 dark:text-amber-400">
+              You have an unsaved draft from a previous session.
+            </span>
+            <div className="flex gap-2 ml-3">
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={restoreDraft}>
+                Restore
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={discardDraft}>
+                Discard
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-6 py-4">
           {/* Title */}
@@ -321,7 +482,7 @@ export function DreamEditor() {
                 Auto-match
               </Button>
             </div>
-            <TagPicker selectedTags={selectedTags} onTagsChange={setSelectedTags} />
+            <TagPicker selectedTags={selectedTags} onTagsChange={handleTagsChange} />
           </div>
 
           {/* Waking Life Context */}
