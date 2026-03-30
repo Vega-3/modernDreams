@@ -4,18 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import { TagBadge } from './TagBadge';
+import { TagApplyDialog } from './TagApplyDialog';
 import { cn, getCategoryColor } from '@/lib/utils';
+import { findMatchingDreams } from '@/lib/tagUtils';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
-import { addTagToDream } from '@/lib/tauri';
 import type { Tag, TagCategory, Dream } from '@/lib/tauri';
 
 interface TagPickerProps {
@@ -31,16 +25,6 @@ const categories: { id: TagCategory; label: string }[] = [
   { id: 'custom', label: 'Custom' },
 ];
 
-function findMatchingDreams(tag: Tag, dreams: Dream[]): Dream[] {
-  const terms = [tag.name, ...tag.aliases].map((s) => s.toLowerCase());
-  return dreams.filter((d) => {
-    const alreadyHas = d.tags.some((t) => t.id === tag.id);
-    if (alreadyHas) return false;
-    const text = d.content_plain.toLowerCase();
-    return terms.some((term) => text.includes(term));
-  });
-}
-
 export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -48,12 +32,9 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
   const { tags, createTag } = useTagStore();
   const { dreams, fetchDreams } = useDreamStore();
 
-  // Auto-apply confirmation state
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
-  const [pendingApplyTag, setPendingApplyTag] = useState<Tag | null>(null);
+  const [pendingTag, setPendingTag] = useState<Tag | null>(null);
   const [matchingDreams, setMatchingDreams] = useState<Dream[]>([]);
-  const [selectedDreamIds, setSelectedDreamIds] = useState<Set<string>>(new Set());
-  const [isApplying, setIsApplying] = useState(false);
 
   const filteredTags = useMemo(() => {
     if (!search) return tags;
@@ -61,7 +42,7 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
     return tags.filter(
       (t) =>
         t.name.toLowerCase().includes(lower) ||
-        t.aliases.some((a) => a.toLowerCase().includes(lower))
+        t.aliases.some((a) => a.toLowerCase().includes(lower)),
     );
   }, [tags, search]);
 
@@ -103,18 +84,16 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
       setSearch('');
       setOpen(false);
 
-      // Scan existing dreams for matches
+      // Ensure dreams are loaded, then scan for matches
       let currentDreams = dreams;
       if (currentDreams.length === 0) {
         await fetchDreams();
-        // dreams may not yet be updated in state; re-read from store
         currentDreams = useDreamStore.getState().dreams;
       }
       const matches = findMatchingDreams(newTag, currentDreams);
       if (matches.length > 0) {
         setMatchingDreams(matches);
-        setSelectedDreamIds(new Set(matches.map((d) => d.id)));
-        setPendingApplyTag(newTag);
+        setPendingTag(newTag);
         setApplyDialogOpen(true);
       }
     } catch (error) {
@@ -122,38 +101,8 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
     }
   };
 
-  const handleApplyToExisting = async () => {
-    if (!pendingApplyTag) return;
-    setIsApplying(true);
-    try {
-      const toUpdate = matchingDreams.filter((d) => selectedDreamIds.has(d.id));
-      await Promise.all(toUpdate.map((d) => addTagToDream(d.id, pendingApplyTag.id)));
-      // Refresh dream list so the new associations are visible
-      await fetchDreams();
-    } catch (error) {
-      console.error('Failed to apply tag to dreams:', error);
-    } finally {
-      setIsApplying(false);
-      setApplyDialogOpen(false);
-      setPendingApplyTag(null);
-      setMatchingDreams([]);
-      setSelectedDreamIds(new Set());
-    }
-  };
-
-  const toggleDreamSelection = (dreamId: string) => {
-    setSelectedDreamIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(dreamId)) {
-        next.delete(dreamId);
-      } else {
-        next.add(dreamId);
-      }
-      return next;
-    });
-  };
-
-  const showCreateOption = search && !tags.some((t) => t.name.toLowerCase() === search.toLowerCase());
+  const showCreateOption =
+    search && !tags.some((t) => t.name.toLowerCase() === search.toLowerCase());
 
   return (
     <>
@@ -199,7 +148,7 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
                             'px-2 py-1 text-xs rounded-md transition-colors',
                             newTagCategory === cat.id
                               ? 'bg-primary text-primary-foreground'
-                              : 'bg-secondary hover:bg-accent'
+                              : 'bg-secondary hover:bg-accent',
                           )}
                         >
                           {cat.label}
@@ -228,7 +177,7 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
                             type="button"
                             onClick={() => toggleTag(tag)}
                             className={cn(
-                              'flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm hover:bg-accent transition-colors'
+                              'flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm hover:bg-accent transition-colors',
                             )}
                           >
                             <span
@@ -241,7 +190,9 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
                                 +{tag.aliases.length} alias{tag.aliases.length !== 1 ? 'es' : ''}
                               </span>
                             )}
-                            {isSelected(tag) && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
+                            {isSelected(tag) && (
+                              <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                            )}
                           </button>
                         ))}
                       </div>
@@ -254,49 +205,14 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
         </Popover>
       </div>
 
-      {/* Apply-to-existing dreams dialog */}
-      <Dialog open={applyDialogOpen} onOpenChange={setApplyDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Apply tag to existing dreams?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              The tag <strong>"{pendingApplyTag?.name}"</strong> matches text in{' '}
-              {matchingDreams.length} existing dream{matchingDreams.length !== 1 ? 's' : ''}.
-              Select the ones you'd like to tag:
-            </p>
-            <div className="space-y-1 max-h-60 overflow-y-auto border rounded-md p-2">
-              {matchingDreams.map((dream) => (
-                <label
-                  key={dream.id}
-                  className="flex items-center gap-2 py-1 px-1 rounded hover:bg-accent cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedDreamIds.has(dream.id)}
-                    onChange={() => toggleDreamSelection(dream.id)}
-                    className="rounded"
-                  />
-                  <span className="text-sm flex-1">{dream.title}</span>
-                  <span className="text-xs text-muted-foreground">{dream.dream_date}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setApplyDialogOpen(false)}>
-              Skip
-            </Button>
-            <Button
-              onClick={handleApplyToExisting}
-              disabled={isApplying || selectedDreamIds.size === 0}
-            >
-              {isApplying ? 'Applying...' : `Apply to ${selectedDreamIds.size} dream${selectedDreamIds.size !== 1 ? 's' : ''}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TagApplyDialog
+        open={applyDialogOpen}
+        onOpenChange={setApplyDialogOpen}
+        tag={pendingTag}
+        matchingDreams={matchingDreams}
+        onApplied={fetchDreams}
+        variant="new"
+      />
     </>
   );
 }

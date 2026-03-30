@@ -13,10 +13,12 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TagBadge } from '@/components/tags/TagBadge';
+import { TagApplyDialog } from '@/components/tags/TagApplyDialog';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
-import { getTagWordAssociations, addTagToDream } from '@/lib/tauri';
+import { findMatchingDreams } from '@/lib/tagUtils';
+import { getTagWordAssociations } from '@/lib/tauri';
 import type { Tag, TagCategory, TagWordUsage, Dream } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
@@ -34,22 +36,11 @@ const presetColors = [
   '#10b981',
 ];
 
-/** Parse a comma-separated aliases string into a trimmed, non-empty array. */
 function parseAliasesInput(raw: string): string[] {
   return raw
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-}
-
-function findMatchingDreams(tag: Tag, dreams: Dream[]): Dream[] {
-  const terms = [tag.name, ...tag.aliases].map((s) => s.toLowerCase());
-  return dreams.filter((d) => {
-    const alreadyHas = d.tags.some((t) => t.id === tag.id);
-    if (alreadyHas) return false;
-    const text = d.content_plain.toLowerCase();
-    return terms.some((term) => text.includes(term));
-  });
 }
 
 export function TagsPage() {
@@ -67,12 +58,9 @@ export function TagsPage() {
   const [wordAssociations, setWordAssociations] = useState<TagWordUsage[]>([]);
   const [loadingAssociations, setLoadingAssociations] = useState(false);
 
-  // Apply-to-dreams state
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [pendingApplyTag, setPendingApplyTag] = useState<Tag | null>(null);
   const [matchingDreams, setMatchingDreams] = useState<Dream[]>([]);
-  const [selectedDreamIds, setSelectedDreamIds] = useState<Set<string>>(new Set());
-  const [isApplying, setIsApplying] = useState(false);
 
   useEffect(() => {
     fetchTags();
@@ -124,9 +112,13 @@ export function TagsPage() {
 
     try {
       if (editingTag) {
-        const oldTerms = new Set([editingTag.name.toLowerCase(), ...editingTag.aliases.map(a => a.toLowerCase())]);
-        const newTerms = [name.trim(), ...parsedAliases].map(s => s.toLowerCase());
-        const addedTerms = newTerms.filter(t => !oldTerms.has(t));
+        const oldTerms = new Set([
+          editingTag.name.toLowerCase(),
+          ...editingTag.aliases.map((a) => a.toLowerCase()),
+        ]);
+        const addedTerms = [name.trim(), ...parsedAliases]
+          .map((s) => s.toLowerCase())
+          .filter((t) => !oldTerms.has(t));
 
         const updatedTag = await updateTag({
           id: editingTag.id,
@@ -138,7 +130,6 @@ export function TagsPage() {
         });
         setIsEditorOpen(false);
 
-        // If new name or aliases were added, scan dreams
         if (addedTerms.length > 0) {
           let currentDreams = dreams;
           if (currentDreams.length === 0) {
@@ -148,7 +139,6 @@ export function TagsPage() {
           const matches = findMatchingDreams(updatedTag, currentDreams);
           if (matches.length > 0) {
             setMatchingDreams(matches);
-            setSelectedDreamIds(new Set(matches.map((d) => d.id)));
             setPendingApplyTag(updatedTag);
             setApplyDialogOpen(true);
           }
@@ -172,33 +162,6 @@ export function TagsPage() {
     if (confirm(`Delete tag "${tag.name}"? This will remove it from all dreams.`)) {
       await deleteTag(tag.id);
     }
-  };
-
-  const handleApplyToExisting = async () => {
-    if (!pendingApplyTag) return;
-    setIsApplying(true);
-    try {
-      const toUpdate = matchingDreams.filter((d) => selectedDreamIds.has(d.id));
-      await Promise.all(toUpdate.map((d) => addTagToDream(d.id, pendingApplyTag.id)));
-      await fetchDreams();
-    } catch (error) {
-      console.error('Failed to apply tag to dreams:', error);
-    } finally {
-      setIsApplying(false);
-      setApplyDialogOpen(false);
-      setPendingApplyTag(null);
-      setMatchingDreams([]);
-      setSelectedDreamIds(new Set());
-    }
-  };
-
-  const toggleDreamSelection = (dreamId: string) => {
-    setSelectedDreamIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(dreamId)) next.delete(dreamId);
-      else next.add(dreamId);
-      return next;
-    });
   };
 
   return (
@@ -387,7 +350,6 @@ export function TagsPage() {
               </p>
             </div>
 
-            {/* Associated words (only shown when editing an existing tag) */}
             {editingTag && (
               <div className="space-y-2 border-t pt-4">
                 <Label>Associated words in dreams</Label>
@@ -433,51 +395,14 @@ export function TagsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Apply-to-existing dreams dialog */}
-      <Dialog open={applyDialogOpen} onOpenChange={setApplyDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Apply updated tag to existing dreams?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              The tag <strong>"{pendingApplyTag?.name}"</strong> (including its aliases) now matches{' '}
-              {matchingDreams.length} dream{matchingDreams.length !== 1 ? 's' : ''} that don't
-              have it yet. Select which to update:
-            </p>
-            <div className="space-y-1 max-h-60 overflow-y-auto border rounded-md p-2">
-              {matchingDreams.map((dream) => (
-                <label
-                  key={dream.id}
-                  className="flex items-center gap-2 py-1 px-1 rounded hover:bg-accent cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedDreamIds.has(dream.id)}
-                    onChange={() => toggleDreamSelection(dream.id)}
-                    className="rounded"
-                  />
-                  <span className="text-sm flex-1">{dream.title}</span>
-                  <span className="text-xs text-muted-foreground">{dream.dream_date}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setApplyDialogOpen(false)}>
-              Skip
-            </Button>
-            <Button
-              onClick={handleApplyToExisting}
-              disabled={isApplying || selectedDreamIds.size === 0}
-            >
-              {isApplying
-                ? 'Applying...'
-                : `Apply to ${selectedDreamIds.size} dream${selectedDreamIds.size !== 1 ? 's' : ''}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TagApplyDialog
+        open={applyDialogOpen}
+        onOpenChange={setApplyDialogOpen}
+        tag={pendingApplyTag}
+        matchingDreams={matchingDreams}
+        onApplied={fetchDreams}
+        variant="updated"
+      />
     </div>
   );
 }
