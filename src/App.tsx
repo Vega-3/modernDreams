@@ -7,17 +7,20 @@ import { GraphPage } from '@/pages/GraphPage';
 import { TagsPage } from '@/pages/TagsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { GuidePage } from '@/pages/GuidePage';
+import { AnalystPage } from '@/pages/AnalystPage';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
+import { useClientStore } from '@/stores/clientStore';
 
 function App() {
   const currentView = useUIStore((state) => state.currentView);
   const fetchTags = useTagStore((state) => state.fetchTags);
+  const fetchClients = useClientStore((state) => state.fetchClients);
 
-  // Load tags on app start
   useEffect(() => {
     fetchTags();
-  }, [fetchTags]);
+    fetchClients();
+  }, [fetchTags, fetchClients]);
 
   const renderPage = () => {
     switch (currentView) {
@@ -29,6 +32,8 @@ function App() {
         return <GraphPage />;
       case 'tags':
         return <TagsPage />;
+      case 'analyst':
+        return <AnalystPage />;
       case 'settings':
         return <SettingsPage />;
       case 'guide':

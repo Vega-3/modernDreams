@@ -15,6 +15,30 @@ pub struct Dream {
     pub waking_life_context: Option<String>,
     #[serde(default)]
     pub tags: Vec<Tag>,
+    pub client_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Client {
+    pub id: String,
+    pub name: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateClientInput {
+    pub name: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportDreamInput {
+    pub client_id: String,
+    pub title: String,
+    pub content_html: String,
+    pub content_plain: String,
+    pub dream_date: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +68,7 @@ pub struct CreateDreamInput {
     pub tag_ids: Vec<String>,
     #[serde(default)]
     pub word_tag_associations: Vec<WordTagAssociation>,
+    pub client_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

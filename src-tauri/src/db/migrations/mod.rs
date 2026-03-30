@@ -91,6 +91,37 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         "#,
     )?;
 
+    // ── Pro-view: client management ───────────────────────────────────────────
+    // Clients represent individual people whose dreams are tracked.
+    // The built-in personal journal uses client_id = NULL on dreams.
+    // Additive migrations below are silently ignored on fresh databases that
+    // already have the columns from CREATE TABLE above.
+    let _ = conn.execute(
+        r#"CREATE TABLE IF NOT EXISTS clients (
+            id   TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )"#,
+        [],
+    );
+
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name)",
+        [],
+    );
+
+    // Add client_id FK column to dreams (nullable — NULL means personal journal)
+    let _ = conn.execute(
+        "ALTER TABLE dreams ADD COLUMN client_id TEXT REFERENCES clients(id) ON DELETE CASCADE",
+        [],
+    );
+
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dreams_client ON dreams(client_id)",
+        [],
+    );
+
     // Additive migration: add aliases column to existing databases.
     // Silently ignored if the column already exists (fresh DB has it from CREATE TABLE).
     let _ = conn.execute(

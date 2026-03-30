@@ -13,6 +13,27 @@ export interface Dream {
   clarity_rating: number | null;
   waking_life_context?: string | null;
   tags: Tag[];
+  client_id: string | null;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface CreateClientInput {
+  name: string;
+  notes: string | null;
+}
+
+export interface ImportDreamInput {
+  client_id: string;
+  title: string;
+  content_html: string;
+  content_plain: string;
+  dream_date: string;
 }
 
 export interface Tag {
@@ -50,6 +71,7 @@ export interface CreateDreamInput {
   waking_life_context?: string | null;
   tag_ids: string[];
   word_tag_associations: WordTagAssociation[];
+  client_id?: string | null;
 }
 
 export interface UpdateDreamInput extends CreateDreamInput {
@@ -167,3 +189,12 @@ export interface GraphStatsResult {
 
 export const getGraphStats = (startDate: string, endDate: string) =>
   invoke<GraphStatsResult>('get_graph_stats', { startDate, endDate });
+
+// ── Client / Analyst commands ─────────────────────────────────────────────────
+
+export const getClients = () => invoke<Client[]>('get_clients');
+export const createClient = (input: CreateClientInput) =>
+  invoke<Client>('create_client', { input });
+export const deleteClient = (id: string) => invoke<void>('delete_client', { id });
+export const importClientDreams = (dreams: ImportDreamInput[]) =>
+  invoke<number>('import_client_dreams', { dreams });

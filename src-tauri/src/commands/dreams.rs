@@ -1,5 +1,6 @@
 use crate::db::DbConnection;
 use crate::models::{CreateDreamInput, Dream, Tag, TagCategory, UpdateDreamInput};
+
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use tauri::State;
@@ -14,7 +15,7 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   waking_life_context
+                   waking_life_context, client_id
             FROM dreams
             ORDER BY dream_date DESC, created_at DESC
             "#,
@@ -36,6 +37,7 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
                 clarity_rating: row.get(9)?,
                 waking_life_context: row.get(10)?,
                 tags: Vec::new(),
+                client_id: row.get(11)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -59,7 +61,7 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   waking_life_context
+                   waking_life_context, client_id
             FROM dreams
             WHERE id = ?1
             "#,
@@ -81,6 +83,7 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
                 clarity_rating: row.get(9)?,
                 waking_life_context: row.get(10)?,
                 tags: Vec::new(),
+                client_id: row.get(11)?,
             })
         })
         .optional()
@@ -109,8 +112,8 @@ pub fn create_dream(
         r#"
         INSERT INTO dreams (id, title, content_html, content_plain, dream_date,
                            created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                           waking_life_context)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                           waking_life_context, client_id)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
         "#,
         params![
             id,
@@ -124,6 +127,7 @@ pub fn create_dream(
             input.mood_rating,
             input.clarity_rating,
             input.waking_life_context,
+            input.client_id,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -162,6 +166,7 @@ pub fn create_dream(
         clarity_rating: input.clarity_rating,
         waking_life_context: input.waking_life_context,
         tags,
+        client_id: input.client_id,
     })
 }
 
@@ -236,7 +241,7 @@ pub fn update_dream(
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   waking_life_context
+                   waking_life_context, client_id
             FROM dreams
             WHERE id = ?1
             "#,
@@ -258,6 +263,7 @@ pub fn update_dream(
                 clarity_rating: row.get(9)?,
                 waking_life_context: row.get(10)?,
                 tags,
+                client_id: row.get(11)?,
             })
         })
         .map_err(|e| e.to_string())?;
