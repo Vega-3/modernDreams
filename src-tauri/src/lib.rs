@@ -34,6 +34,8 @@ pub fn run() {
             commands::claude::transcribe_handwriting_claude,
             commands::claude::verify_api_key,
             commands::graph::get_graph_stats,
+            commands::theme::get_tag_notes,
+            commands::theme::save_tag_notes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

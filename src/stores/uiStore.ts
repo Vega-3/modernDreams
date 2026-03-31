@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type View = 'dashboard' | 'journal' | 'calendar' | 'graph' | 'tags' | 'settings' | 'guide';
+type View = 'dashboard' | 'journal' | 'calendar' | 'graph' | 'tags' | 'theme' | 'settings' | 'guide';
 
 interface RecognizedDream {
   rawTranscript: string;

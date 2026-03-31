@@ -210,3 +210,9 @@ export interface GraphStatsResult {
 
 export const getGraphStats = (startDate: string, endDate: string) =>
   invoke<GraphStatsResult>('get_graph_stats', { startDate, endDate });
+
+// Theme Analysis commands
+export const getTagNotes = (tagId: string) =>
+  invoke<string>('get_tag_notes', { tagId });
+export const saveTagNotes = (tagId: string, notes: string) =>
+  invoke<void>('save_tag_notes', { tagId, notes });

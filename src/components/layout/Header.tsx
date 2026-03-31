@@ -8,7 +8,9 @@ const viewTitles: Record<string, string> = {
   calendar: 'Calendar',
   graph: 'Dream Graph',
   tags: 'Tags',
+  theme: 'Theme Analysis',
   settings: 'Settings',
+  guide: 'Guide',
 };
 
 export function Header() {
