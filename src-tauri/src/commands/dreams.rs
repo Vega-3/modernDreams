@@ -275,6 +275,25 @@ pub fn delete_dream(id: String, db: State<'_, DbConnection>) -> Result<(), Strin
     Ok(())
 }
 
+/// Add a tag to a dream without needing the full dream payload.
+/// Silently succeeds if the association already exists.
+#[tauri::command]
+pub fn add_tag_to_dream(
+    dream_id: String,
+    tag_id: String,
+    db: State<'_, DbConnection>,
+) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO dream_tags (dream_id, tag_id) VALUES (?1, ?2)",
+        params![dream_id, tag_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 fn get_dream_tags(
     conn: &rusqlite::Connection,
     dream_id: &str,
