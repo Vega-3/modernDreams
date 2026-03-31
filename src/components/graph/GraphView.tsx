@@ -221,7 +221,7 @@ export function GraphView() {
 
         // Accumulate forces for each node
         const forces = new Map<string, { fx: number; fy: number }>();
-        nodes.forEach((n) => forces.set(n.id(), { fx: 0, fy: 0 }));
+        nodes.forEach((n) => { forces.set(n.id(), { fx: 0, fy: 0 }); });
 
         const nodeArr = nodes.toArray();
 
