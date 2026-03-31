@@ -29,13 +29,51 @@ pub struct GraphEdgeStat {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct GraphEdgeAffinityStat {
+    pub source_id: String,
+    pub source_name: String,
+    pub target_id: String,
+    pub target_name: String,
+    pub weight: u64,
+    pub affinity: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GraphEdgeLiftStat {
+    pub source_id: String,
+    pub source_name: String,
+    pub target_id: String,
+    pub target_name: String,
+    pub weight: u64,
+    pub lift: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GraphTriangle {
+    pub a_id: String,
+    pub a_name: String,
+    pub b_id: String,
+    pub b_name: String,
+    pub c_id: String,
+    pub c_name: String,
+    pub min_weight: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GraphStatsResult {
     pub dream_count: u64,
     pub tag_count: u64,
+    // Overview
     pub top_order: Vec<GraphNodeStat>,
     pub top_strength: Vec<GraphNodeStat>,
     pub top_centrality: Vec<GraphNodeStat>,
     pub top_edges: Vec<GraphEdgeStat>,
+    // Deep Analysis
+    pub significant_pairs: Vec<GraphEdgeAffinityStat>,
+    pub top_clustering: Vec<GraphNodeStat>,
+    pub top_betweenness: Vec<GraphNodeStat>,
+    pub top_lift: Vec<GraphEdgeLiftStat>,
+    pub top_triangles: Vec<GraphTriangle>,
 }
 
 // ── Tauri command ─────────────────────────────────────────────────────────────
@@ -138,8 +176,14 @@ fn build_graph_input(
     //    Formally: contract each dream node dₖ by adding edges between all
     //    pairs of tags incident to dₖ, accumulating weights across dreams.
     let mut co_occurrence: HashMap<(String, String), u64> = HashMap::new();
+    let mut tag_dream_counts: HashMap<String, u64> = HashMap::new();
 
     for tag_ids in &dream_tag_sets {
+        // Individual tag frequencies (needed for Jaccard / lift in Python)
+        for tag_id in tag_ids {
+            *tag_dream_counts.entry(tag_id.clone()).or_insert(0) += 1;
+        }
+
         for i in 0..tag_ids.len() {
             for j in (i + 1)..tag_ids.len() {
                 // Canonical key: (smaller_id, larger_id) — keeps the matrix undirected
@@ -164,9 +208,10 @@ fn build_graph_input(
         .collect();
 
     Ok(serde_json::json!({
-        "dream_count":   dream_count,
-        "tags":          tags_json,
-        "co_occurrences": co_json,
+        "dream_count":      dream_count,
+        "tags":             tags_json,
+        "co_occurrences":   co_json,
+        "tag_dream_counts": tag_dream_counts,
     }))
 }
 

@@ -152,9 +152,41 @@ export interface GraphEdgeStat {
   weight: number;
 }
 
+export interface GraphEdgeAffinityStat {
+  source_id: string;
+  source_name: string;
+  target_id: string;
+  target_name: string;
+  weight: number;
+  /** Jaccard coefficient [0,1] — how exclusively the pair co-occurs */
+  affinity: number;
+}
+
+export interface GraphEdgeLiftStat {
+  source_id: string;
+  source_name: string;
+  target_id: string;
+  target_name: string;
+  weight: number;
+  /** Lift = (w × D) / (N_i × N_j) — ratio of observed to expected co-occurrence */
+  lift: number;
+}
+
+export interface GraphTriangle {
+  a_id: string;
+  a_name: string;
+  b_id: string;
+  b_name: string;
+  c_id: string;
+  c_name: string;
+  /** Weakest edge in the triplet (lower bound on cohesion) */
+  min_weight: number;
+}
+
 export interface GraphStatsResult {
   dream_count: number;
   tag_count: number;
+  // Overview
   /** Top-5 tags by unweighted degree (number of distinct neighbours) */
   top_order: GraphNodeStat[];
   /** Top-5 tags by strength (sum of all edge weights) */
@@ -163,6 +195,17 @@ export interface GraphStatsResult {
   top_centrality: GraphNodeStat[];
   /** Top-5 tag pairs by co-occurrence weight */
   top_edges: GraphEdgeStat[];
+  // Deep Analysis
+  /** Pairs co-occurring ≥ 3 times, ranked by Jaccard affinity */
+  significant_pairs: GraphEdgeAffinityStat[];
+  /** Top-5 tags by local clustering coefficient */
+  top_clustering: GraphNodeStat[];
+  /** Top-5 tags by betweenness centrality (bridge nodes) */
+  top_betweenness: GraphNodeStat[];
+  /** Top-5 pairs (w ≥ 2) by co-occurrence lift over random chance */
+  top_lift: GraphEdgeLiftStat[];
+  /** Top-5 thematic triangles — triplets where all pairs co-occur ≥ 2 times */
+  top_triangles: GraphTriangle[];
 }
 
 export const getGraphStats = (startDate: string, endDate: string) =>
