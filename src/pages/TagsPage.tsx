@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Hash } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,10 +13,13 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TagBadge } from '@/components/tags/TagBadge';
+import { TagApplyDialog } from '@/components/tags/TagApplyDialog';
 import { useTagStore } from '@/stores/tagStore';
+import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
+import { findMatchingDreams } from '@/lib/tagUtils';
 import { getTagWordAssociations } from '@/lib/tauri';
-import type { Tag, TagCategory, TagWordUsage } from '@/lib/tauri';
+import type { Tag, TagCategory, TagWordUsage, Dream } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
   { id: 'location', label: 'Locations' },
@@ -33,7 +36,6 @@ const presetColors = [
   '#10b981',
 ];
 
-/** Parse a comma-separated aliases string into a trimmed, non-empty array. */
 function parseAliasesInput(raw: string): string[] {
   return raw
     .split(',')
@@ -49,6 +51,7 @@ const EMOTIVE_SUBCATEGORIES = [
 
 export function TagsPage() {
   const { tags, fetchTags, createTag, updateTag, deleteTag } = useTagStore();
+  const { dreams, fetchDreams } = useDreamStore();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<TagCategory>('location');
   const [activeEmotiveSubcategory, setActiveEmotiveSubcategory] = useState<string>('positive');
@@ -59,10 +62,13 @@ export function TagsPage() {
   const [emotiveSubcategory, setEmotiveSubcategory] = useState<string | null>(null);
   const [color, setColor] = useState('#6366f1');
   const [description, setDescription] = useState('');
-  // Comma-separated in the UI; converted to/from string[] on save/load
   const [aliases, setAliases] = useState('');
   const [wordAssociations, setWordAssociations] = useState<TagWordUsage[]>([]);
   const [loadingAssociations, setLoadingAssociations] = useState(false);
+
+  const [applyDialogOpen, setApplyDialogOpen] = useState(false);
+  const [pendingApplyTag, setPendingApplyTag] = useState<Tag | null>(null);
+  const [matchingDreams, setMatchingDreams] = useState<Dream[]>([]);
 
   useEffect(() => {
     fetchTags();
@@ -88,7 +94,6 @@ export function TagsPage() {
       setColor(tag.color);
       setDescription(tag.description || '');
       setAliases(tag.aliases.join(', '));
-      // Fetch word associations for this tag
       setLoadingAssociations(true);
       try {
         const assocs = await getTagWordAssociations(tag.id);
@@ -119,7 +124,15 @@ export function TagsPage() {
 
     try {
       if (editingTag) {
-        await updateTag({
+        const oldTerms = new Set([
+          editingTag.name.toLowerCase(),
+          ...editingTag.aliases.map((a) => a.toLowerCase()),
+        ]);
+        const addedTerms = [name.trim(), ...parsedAliases]
+          .map((s) => s.toLowerCase())
+          .filter((t) => !oldTerms.has(t));
+
+        const updatedTag = await updateTag({
           id: editingTag.id,
           name: name.trim(),
           category,
@@ -128,6 +141,21 @@ export function TagsPage() {
           aliases: parsedAliases,
           emotive_subcategory: category === 'emotive' ? emotiveSubcategory : null,
         });
+        setIsEditorOpen(false);
+
+        if (addedTerms.length > 0) {
+          let currentDreams = dreams;
+          if (currentDreams.length === 0) {
+            await fetchDreams();
+            currentDreams = useDreamStore.getState().dreams;
+          }
+          const matches = findMatchingDreams(updatedTag, currentDreams);
+          if (matches.length > 0) {
+            setMatchingDreams(matches);
+            setPendingApplyTag(updatedTag);
+            setApplyDialogOpen(true);
+          }
+        }
       } else {
         await createTag({
           name: name.trim(),
@@ -137,8 +165,8 @@ export function TagsPage() {
           aliases: parsedAliases,
           emotive_subcategory: category === 'emotive' ? emotiveSubcategory : null,
         });
+        setIsEditorOpen(false);
       }
-      setIsEditorOpen(false);
     } catch (error) {
       console.error('Failed to save tag:', error);
     }
@@ -159,7 +187,7 @@ export function TagsPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tags..."
+            placeholder="Search tags or aliases..."
             className="pl-9"
           />
         </div>
@@ -208,44 +236,65 @@ export function TagsPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {filteredTags.map((tag) => (
-                  <Card key={tag.id}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
+                  <Card key={tag.id} className="flex flex-col min-h-[160px]">
+                    <CardHeader className="pb-2 pt-3 px-3">
+                      <div className="flex items-start justify-between gap-1">
                         <TagBadge tag={tag} />
-                        <div className="flex gap-1">
+                        <div className="flex gap-0.5 flex-shrink-0">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             onClick={() => openEditor(tag)}
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive"
+                            className="h-7 w-7 text-destructive"
                             onClick={() => handleDelete(tag)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      {tag.description && (
-                        <p className="text-sm text-muted-foreground mb-2">{tag.description}</p>
-                      )}
-                      {tag.aliases.length > 0 && (
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Also matches:{' '}
-                          <span className="italic">{tag.aliases.join(', ')}</span>
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Used in {tag.usage_count} dream{tag.usage_count !== 1 ? 's' : ''}
+                    <CardContent className="flex-1 flex flex-col justify-between px-3 pb-3">
+                      <div className="space-y-2">
+                        {tag.description && (
+                          <p className="text-xs text-muted-foreground leading-snug line-clamp-2">
+                            {tag.description}
+                          </p>
+                        )}
+                        {tag.aliases.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <Hash className="h-2.5 w-2.5" />
+                              Also matches
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {tag.aliases.map((alias) => (
+                                <span
+                                  key={alias}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                  style={{
+                                    backgroundColor: tag.color + '20',
+                                    color: tag.color,
+                                    border: `1px solid ${tag.color}40`,
+                                  }}
+                                >
+                                  {alias}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-2">
+                        {tag.usage_count} dream{tag.usage_count !== 1 ? 's' : ''}
                       </p>
                     </CardContent>
                   </Card>
@@ -360,12 +409,11 @@ export function TagsPage() {
                 placeholder="e.g. flying, levitate, hover"
               />
               <p className="text-xs text-muted-foreground">
-                Comma-separated. The auto-match button in the dream editor will apply this tag when
-                any of these words appear in the dream text.
+                Comma-separated. Auto-match will apply this tag when any of these words appear.
+                Adding new aliases will prompt you to apply to existing dreams.
               </p>
             </div>
 
-            {/* Associated words (only shown when editing an existing tag) */}
             {editingTag && (
               <div className="space-y-2 border-t pt-4">
                 <Label>Associated words in dreams</Label>
@@ -410,6 +458,15 @@ export function TagsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TagApplyDialog
+        open={applyDialogOpen}
+        onOpenChange={setApplyDialogOpen}
+        tag={pendingApplyTag}
+        matchingDreams={matchingDreams}
+        onApplied={fetchDreams}
+        variant="updated"
+      />
     </div>
   );
 }
