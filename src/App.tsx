@@ -8,6 +8,7 @@ import { GraphPage } from '@/pages/GraphPage';
 import { TagsPage } from '@/pages/TagsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { GuidePage } from '@/pages/GuidePage';
+import { ThemeAnalysisPage } from '@/pages/ThemeAnalysisPage';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -33,6 +34,8 @@ function App() {
         return <GraphPage />;
       case 'tags':
         return <TagsPage />;
+      case 'theme':
+        return <ThemeAnalysisPage />;
       case 'settings':
         return <SettingsPage />;
       case 'guide':
