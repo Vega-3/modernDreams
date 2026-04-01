@@ -174,12 +174,21 @@ export function GraphView() {
       }
     });
 
-    // Tag-tag co-occurrence edges (threshold ≥ 2)
+    // Tag-tag co-occurrence edges.
+    // Trigger: dreams are hidden vs. visible.
+    // Why: When dreams are visible, they serve as intermediate nodes — a direct tag→tag
+    //      edge would duplicate the relationship already represented by the dream node.
+    //      When dreams are hidden we must perform an edge contraction of every degree-1
+    //      dream vertex, so all tags that shared a dream need a direct edge regardless
+    //      of how many dreams they co-occurred in.
+    // Outcome: threshold is 2 with dreams visible (only recurring pairs), 1 when hidden
+    //          (full contraction — every tag pair that ever shared a dream is connected).
+    const coEdgeThreshold = showDreams ? 2 : 1;
     const addedEdges = new Set<string>();
     tagCoOccurrence.forEach((coTags, tagId) => {
       coTags.forEach((count, coTagId) => {
         const edgeKey = [tagId, coTagId].sort().join('-');
-        if (!addedEdges.has(edgeKey) && count >= 2) {
+        if (!addedEdges.has(edgeKey) && count >= coEdgeThreshold) {
           addedEdges.add(edgeKey);
           edges.push({
             data: {
