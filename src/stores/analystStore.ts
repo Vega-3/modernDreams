@@ -9,9 +9,10 @@ export interface Client {
   createdAt: string;
 }
 
-// Prefix used to tag imported dreams in their waking_life_context field
-export const CLIENT_PREFIX = '[Client:';
-export function clientPrefix(name: string) { return `${CLIENT_PREFIX} ${name}]`; }
+// Prefix used to tag imported dreams in their waking_life_context field.
+// The regex in extractClientName is intentionally permissive (\s*) to tolerate
+// hand-edited entries where the space may vary.
+export function clientPrefix(name: string) { return `[Client: ${name}]`; }
 
 // Extract client name from a waking_life_context string, returns null if not present
 export function extractClientName(wakingLifeContext: string | null | undefined): string | null {

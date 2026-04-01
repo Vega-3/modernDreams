@@ -214,21 +214,10 @@ export function DreamEditor() {
   });
 
   // Load/reset the editor whenever it opens.
-  //
-  // Dependencies: editingDreamId, editor, editorOpen
-  //
-  // Trigger: editorOpen is included so that reopening the new-dream editor
-  //   (where editingDreamId stays null→null) reliably clears the previous
-  //   session's fields. Without it, the effect would not re-run and the form
-  //   would retain its last-saved values.
-  //
-  // Why guard on editorOpen: when the editor closes, closeEditor() batches
-  //   editorOpen=false with editingDreamId=null in the same render. Without
-  //   the guard the effect would fire during the dialog's exit animation and
-  //   call editor.setContent(''), causing a black-screen flash.
-  //
-  // Outcome: form fields are always fresh when the dialog opens; no mutation
-  //   occurs while the dialog is animating out.
+  // editorOpen in deps: ensures the reset branch runs when reopening a new-dream
+  //   editor (editingDreamId stays null→null, so it would otherwise be skipped).
+  // Early-return when !editorOpen: prevents setContent('') from firing during
+  //   the dialog's exit animation, which caused a black-screen flash on close.
   useEffect(() => {
     // Only run when the editor is actually opening, not closing.
     if (!editorOpen) return;

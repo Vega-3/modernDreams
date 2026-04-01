@@ -1,5 +1,11 @@
 import { Search, Plus, Upload, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useUIStore } from '@/stores/uiStore';
 import { useAnalystStore } from '@/stores/analystStore';
 
@@ -51,25 +57,22 @@ export function Header() {
                 </button>
               </Button>
             ) : (
-              <div className="relative group">
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Users className="h-4 w-4" />
-                  <span className="hidden sm:inline">All clients</span>
-                </Button>
-                {/* Dropdown — shown on hover */}
-                <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block min-w-[150px] rounded-md border bg-popover shadow-md p-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Users className="h-4 w-4" />
+                    <span className="hidden sm:inline">All clients</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
                   {clients.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => setActiveClient(c.id)}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
-                    >
-                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                    <DropdownMenuItem key={c.id} onClick={() => setActiveClient(c.id)}>
+                      <div className="h-2.5 w-2.5 rounded-full mr-2" style={{ backgroundColor: c.color }} />
                       {c.name}
-                    </button>
+                    </DropdownMenuItem>
                   ))}
-                </div>
-              </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         )}
