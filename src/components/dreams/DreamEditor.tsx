@@ -213,12 +213,26 @@ export function DreamEditor() {
     },
   });
 
-  // Load existing dream data when the editor opens for a specific dream.
-  // Depends only on editingDreamId (and editor), NOT on the dream object itself —
-  // so that a store update after save does NOT re-trigger this effect and reload
-  // the full content_html (potentially containing large base64 images) back into
-  // the editor just before it is cleared, which was causing the black-screen crash.
+  // Load/reset the editor whenever it opens.
+  //
+  // Dependencies: editingDreamId, editor, editorOpen
+  //
+  // Trigger: editorOpen is included so that reopening the new-dream editor
+  //   (where editingDreamId stays null→null) reliably clears the previous
+  //   session's fields. Without it, the effect would not re-run and the form
+  //   would retain its last-saved values.
+  //
+  // Why guard on editorOpen: when the editor closes, closeEditor() batches
+  //   editorOpen=false with editingDreamId=null in the same render. Without
+  //   the guard the effect would fire during the dialog's exit animation and
+  //   call editor.setContent(''), causing a black-screen flash.
+  //
+  // Outcome: form fields are always fresh when the dialog opens; no mutation
+  //   occurs while the dialog is animating out.
   useEffect(() => {
+    // Only run when the editor is actually opening, not closing.
+    if (!editorOpen) return;
+
     const editingDream = getDreamSnapshot();
     if (editingDream && editor) {
       setTitle(editingDream.title);
@@ -228,14 +242,12 @@ export function DreamEditor() {
       setClarityRating(editingDream.clarity_rating);
       setSelectedTags(editingDream.tags);
       setWakingLifeContext(editingDream.waking_life_context || '');
+      setAnalysisNotes(editingDream.analysis_notes || '');
       editor.commands.setContent(editingDream.content_html);
       draftRestoredRef.current = true;
     } else if (!editingDreamId && editor) {
-      // Always reset fields when entering new-dream mode. draftRestoredRef may
-      // be stale-true from a prior edit session due to React effect ordering
-      // (the load effect runs before the close effect when closeEditor batches
-      // editingDreamId=null with editorOpen=false in the same render), so reset
-      // it unconditionally here rather than letting it gate the field clear.
+      // Reset all fields when entering new-dream mode so that a previous
+      // session's content never carries over into a fresh entry.
       draftRestoredRef.current = false;
       setTitle('');
       setDreamDate(format(new Date(), 'yyyy-MM-dd'));
@@ -244,6 +256,7 @@ export function DreamEditor() {
       setClarityRating(null);
       setSelectedTags([]);
       setWakingLifeContext('');
+      setAnalysisNotes('');
       editor.commands.setContent('');
       // After clearing, offer to restore any previously saved draft
       try {
@@ -260,7 +273,7 @@ export function DreamEditor() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingDreamId, editor]);
+  }, [editingDreamId, editor, editorOpen]);
 
   // Reset draftRestoredRef when editor closes
   useEffect(() => {
