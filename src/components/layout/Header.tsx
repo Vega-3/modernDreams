@@ -1,6 +1,7 @@
-import { Search, Plus, Upload } from 'lucide-react';
+import { Search, Plus, Upload, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/uiStore';
+import { useAnalystStore } from '@/stores/analystStore';
 
 const viewTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -9,18 +10,68 @@ const viewTitles: Record<string, string> = {
   graph: 'Dream Graph',
   tags: 'Tags',
   theme: 'Theme Analysis',
+  analyst: 'Analyst',
   settings: 'Settings',
   guide: 'Guide',
 };
 
 export function Header() {
   const { currentView, openSearch, openEditor, openHandwritingUpload } = useUIStore();
+  const { analystMode, clients, activeClientId, setActiveClient } = useAnalystStore();
+
+  const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-card px-6">
       <h1 className="text-xl font-semibold">{viewTitles[currentView]}</h1>
 
       <div className="flex items-center gap-2">
+        {/* Client filter — visible on all views when analyst mode is active and clients exist */}
+        {analystMode && clients.length > 0 && (
+          <div className="flex items-center gap-1">
+            {activeClient ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 pr-1.5"
+                style={{ borderColor: activeClient.color, color: activeClient.color }}
+              >
+                <div
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: activeClient.color }}
+                />
+                <span className="text-xs max-w-[100px] truncate">{activeClient.name}</span>
+                <button
+                  onClick={() => setActiveClient(null)}
+                  className="ml-1 rounded hover:bg-accent p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Button>
+            ) : (
+              <div className="relative group">
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Users className="h-4 w-4" />
+                  <span className="hidden sm:inline">All clients</span>
+                </Button>
+                {/* Dropdown — shown on hover */}
+                <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block min-w-[150px] rounded-md border bg-popover shadow-md p-1">
+                  {clients.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setActiveClient(c.id)}
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+                    >
+                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <Button variant="outline" size="sm" className="gap-2" onClick={openSearch}>
           <Search className="h-4 w-4" />
           <span className="hidden sm:inline">Search</span>

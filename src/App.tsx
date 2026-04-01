@@ -9,6 +9,7 @@ import { TagsPage } from '@/pages/TagsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { GuidePage } from '@/pages/GuidePage';
 import { ThemeAnalysisPage } from '@/pages/ThemeAnalysisPage';
+import { AnalystPage } from '@/pages/AnalystPage';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -36,6 +37,8 @@ function App() {
         return <TagsPage />;
       case 'theme':
         return <ThemeAnalysisPage />;
+      case 'analyst':
+        return <AnalystPage />;
       case 'settings':
         return <SettingsPage />;
       case 'guide':

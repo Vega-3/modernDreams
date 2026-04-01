@@ -4,10 +4,23 @@ import { DreamCard } from './DreamCard';
 import { Button } from '@/components/ui/button';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
+import { useAnalystStore, extractClientName } from '@/stores/analystStore';
 
 export function DreamList() {
   const { dreams, isLoading, fetchDreams } = useDreamStore();
   const { openEditor } = useUIStore();
+  const { analystMode, clients, activeClientId } = useAnalystStore();
+
+  // --- Client filter ---
+  // When an active client is selected in analyst mode, show only their dreams.
+  // Client dreams are identified by the [Client: Name] prefix in waking_life_context.
+  const activeClient = analystMode && activeClientId
+    ? clients.find((c) => c.id === activeClientId) ?? null
+    : null;
+
+  const visibleDreams = activeClient
+    ? dreams.filter((d) => extractClientName(d.waking_life_context) === activeClient.name)
+    : dreams;
 
   useEffect(() => {
     fetchDreams();
@@ -21,20 +34,26 @@ export function DreamList() {
     );
   }
 
-  if (dreams.length === 0) {
+  if (visibleDreams.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-semibold mb-2">No dreams yet</h3>
-        <p className="text-muted-foreground mb-4">Start recording your dreams to see them here</p>
-        <Button onClick={() => openEditor()}>Record First Dream</Button>
+        <h3 className="text-lg font-semibold mb-2">
+          {activeClient ? `No dreams for ${activeClient.name}` : 'No dreams yet'}
+        </h3>
+        <p className="text-muted-foreground mb-4">
+          {activeClient
+            ? 'Import dreams for this client from the Analyst page.'
+            : 'Start recording your dreams to see them here'}
+        </p>
+        {!activeClient && <Button onClick={() => openEditor()}>Record First Dream</Button>}
       </div>
     );
   }
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {dreams.map((dream) => (
+      {visibleDreams.map((dream) => (
         <DreamCard key={dream.id} dream={dream} />
       ))}
     </div>
