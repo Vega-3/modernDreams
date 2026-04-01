@@ -107,6 +107,8 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         [],
     );
 
+  
+
     // Additive migration: add analysis_notes column to existing databases.
     let _ = conn.execute(
         "ALTER TABLE dreams ADD COLUMN analysis_notes TEXT",
@@ -118,6 +120,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         "ALTER TABLE tags ADD COLUMN emotive_subcategory TEXT",
         [],
     );
+
+  // Additive migration: tag notes for the Theme Analysis page.
+    // Using CREATE TABLE IF NOT EXISTS so it is safe to run on every startup.
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS tag_notes (
+            tag_id   TEXT PRIMARY KEY REFERENCES tags(id) ON DELETE CASCADE,
+            notes    TEXT NOT NULL DEFAULT '',
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        "#,
+    )?;
 
     Ok(())
 }
