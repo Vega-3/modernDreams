@@ -19,7 +19,8 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Dream Journal**: Rich text editor for recording dreams with tags
 - **Tag System**: 5 categories (Location, Person, Symbolic, Emotive, Custom)
 - **Calendar View**: View dreams by date with month/week views
-- **Graph View**: Network visualization of dream-tag relationships
+- **Graph View**: Network visualization of dream-tag relationships with edge contraction (hiding dreams directly connects co-occurring tags)
+- **Theme Analysis**: Cross-tag pattern analysis with custom notes per tag
 - **Full-text Search**: Quick search across all dreams (Ctrl+K)
 - **Obsidian Export**: Export to Obsidian vault with wikilinks and Dataview support
 - **Handwriting Scan**: Import handwritten dream notes using a two-stage Claude AI pipeline — raw transcription followed by English translation, with auto tag matching
@@ -27,6 +28,7 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Auto-match Tags**: Scans the dream text and automatically applies any tags whose name appears in the content
 - **Inline Images**: Attach and embed images directly into dream entries via the toolbar
 - **Guide**: A built-in guide page that loads `public/GUIDE.md` — edit that file to document your own journalling workflow
+- **Analyst Mode**: Multi-client dream management for professional analysts — manage client profiles, bulk-import dreams from text files, and filter the journal by client
 
 ## Prerequisites
 
@@ -114,6 +116,22 @@ The **Guide** page (sidebar → Guide) displays `public/GUIDE.md`. Edit that fil
 - Tips for using the handwriting scanner
 - Any other workflow notes
 
+## Graph View
+
+The Graph page visualises dream–tag relationships as a force-directed network. Use the group
+toggles (top-left) to show or hide Dreams, or any of the five tag categories.
+
+### Edge contraction when hiding dreams
+
+When the **Dreams** group is hidden, the view performs an *edge contraction* on all dream
+nodes: any two tags that appeared together in at least one dream are connected directly. This
+matches the expected graph-theory behaviour (contracting degree-1 vertices) described in the
+original design.
+
+With dreams visible, direct tag–tag edges are only drawn when two tags co-occur in **2 or
+more** dreams (to avoid clutter). With dreams hidden, all co-occurrences (≥ 1 shared dream)
+produce a direct edge.
+
 ## Graph Theory Analysis
 
 The **Graph** page includes a collapsible statistics panel (right side) that performs
@@ -156,6 +174,24 @@ src-tauri/resources/
 └── graph_analysis.py   # Compiled into the binary via include_str!
 ```
 
+## Analyst Mode
+
+The **Analyst** page (sidebar → Analyst) provides tools for professionals managing multiple clients' dream journals.
+
+### Features
+
+- **Mode toggle**: Switch between Personal and Analyst mode at any time.
+- **Client management**: Add and remove named clients, each with a colour identifier.
+- **Bulk import**: Select one or more `.txt` files per client to import as dream entries. Each file becomes one dream; if the first line is a `YYYY-MM-DD` date it is used as the dream date, otherwise today's date is applied.
+- **Client filter**: When clients exist, a filter button appears in the header (left of the search button). Select a client to show only their dreams in the Journal; click the × badge to return to the full view.
+
+### How client tagging works
+
+Imported dreams are tagged by prepending `[Client: Name]` to the dream's Waking Life Context field. This means:
+- Client attribution persists in the database without schema changes.
+- Hand-edited dreams can be manually attributed to a client by adding the same prefix.
+- The search dialog can find client-specific dreams by searching for `[Client: Name]`.
+
 ## Keyboard Shortcuts
 
 - `Ctrl+K` - Open search dialog
@@ -180,6 +216,19 @@ The export creates:
 - YAML frontmatter with metadata
 - Wikilinks for navigation
 - Dataview queries for related dreams
+
+## Design
+
+The UI uses a **Persona 5-inspired** dark aesthetic: deep blacks, vivid purple as the primary
+colour, sharp angular corners, and maximalist accents throughout. Key design tokens are
+defined in `src/styles/globals.css` using CSS custom properties on `:root`, so the palette
+can be adjusted in one place.
+
+Notable visual elements:
+- Dream cards have a thick left purple accent stripe and a top-right polygon clip corner.
+- Active sidebar items show a bold left border and elevated weight.
+- The header uses an uppercase bold title and a right-edge gradient accent line.
+- Dialog titles carry a left-rule purple bar for strong visual hierarchy.
 
 ## License
 
