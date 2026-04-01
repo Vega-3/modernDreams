@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import cytoscape, { Core } from 'cytoscape';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -246,10 +246,10 @@ function StarGraphPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
 
-  // Compute co-occurring tags and edge weights from the dreams list
-  const coTagMap = useRef<Map<string, { tag: Tag; weight: number }>>(new Map());
-
-  useEffect(() => {
+  // Compute co-occurring tags and edge weights from the dreams list.
+  // useMemo (not useRef+useEffect) so the value is ready at render time,
+  // which ensures the container div is mounted before the Cytoscape effect runs.
+  const coTagMap = useMemo(() => {
     const map = new Map<string, { tag: Tag; weight: number }>();
     const tagById = new Map(allTags.map((t) => [t.id, t]));
     for (const dream of dreams) {
@@ -265,14 +265,14 @@ function StarGraphPanel({
         }
       }
     }
-    coTagMap.current = map;
+    return map;
   }, [dreams, tag, allTags]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const centerColor = getCategoryColor(tag.category);
-    const coEntries = Array.from(coTagMap.current.entries());
+    const coEntries = Array.from(coTagMap.entries());
 
     const nodes = [
       {
@@ -357,17 +357,17 @@ function StarGraphPanel({
 
     cyRef.current = cy;
     return () => cy.destroy();
-  }, [tag, dreams, allTags]);
+  }, [tag, dreams, allTags, coTagMap]);
 
   return (
     <Card className="flex flex-col overflow-hidden p-3 gap-2">
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-sm font-semibold">Co-occurrence Network</span>
         <span className="text-xs text-muted-foreground ml-auto">
-          {coTagMap.current.size} connected tag{coTagMap.current.size !== 1 ? 's' : ''}
+          {coTagMap.size} connected tag{coTagMap.size !== 1 ? 's' : ''}
         </span>
       </div>
-      {coTagMap.current.size === 0 ? (
+      {coTagMap.size === 0 ? (
         <p className="text-xs text-muted-foreground italic flex-1 flex items-center justify-center">
           No co-occurring tags found for this theme.
         </p>

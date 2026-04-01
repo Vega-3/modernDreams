@@ -10,7 +10,8 @@
       "Bash(echo \"exit: $?\")",
       "Bash(gh issue:*)",
       "Bash(gh auth:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

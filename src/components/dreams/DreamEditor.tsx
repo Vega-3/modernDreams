@@ -123,7 +123,12 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
   });
 }
 
-/** Remove all tagHighlight marks for a given tagId from the editor. */
+/**
+ * Remove a specific tag from all tagHighlight marks in the editor.
+ * Each mark stores a `tags` array (not a single tagId), so we must:
+ *  - filter out the removed tag from the array, and
+ *  - remove the mark entirely if the array becomes empty.
+ */
 function removeTagMarksFromEditor(editor: Editor, tagId: string) {
   try {
     const { tr, doc, schema } = editor.state;
@@ -134,10 +139,22 @@ function removeTagMarksFromEditor(editor: Editor, tagId: string) {
     doc.nodesBetween(0, doc.content.size, (node, pos) => {
       if (!node.isText) return;
       node.marks.forEach((mark) => {
-        if (mark.type === markType && mark.attrs.tagId === tagId) {
-          tr.removeMark(pos, pos + node.nodeSize, markType);
-          changed = true;
+        if (mark.type !== markType) return;
+        const existingTags: TagRef[] = mark.attrs.tags ?? [];
+        if (!existingTags.some((t) => t.tagId === tagId)) return;
+
+        const newTags = existingTags.filter((t) => t.tagId !== tagId);
+        // Remove the mark from this range unconditionally first.
+        tr.removeMark(pos, pos + node.nodeSize, markType);
+        // Re-apply with the filtered tag list if other tags remain.
+        if (newTags.length > 0) {
+          tr.addMark(
+            pos,
+            pos + node.nodeSize,
+            markType.create({ ...mark.attrs, tags: newTags }),
+          );
         }
+        changed = true;
       });
     });
 
@@ -202,6 +219,7 @@ export function DreamEditor() {
   // the full content_html (potentially containing large base64 images) back into
   // the editor just before it is cleared, which was causing the black-screen crash.
   useEffect(() => {
+    const editingDream = getDreamSnapshot();
     if (editingDream && editor) {
       setTitle(editingDream.title);
       setDreamDate(editingDream.dream_date);
@@ -213,10 +231,24 @@ export function DreamEditor() {
       editor.commands.setContent(editingDream.content_html);
       draftRestoredRef.current = true;
     } else if (!editingDreamId && editor) {
-      // Check for a saved draft
+      // Always reset fields when entering new-dream mode. draftRestoredRef may
+      // be stale-true from a prior edit session due to React effect ordering
+      // (the load effect runs before the close effect when closeEditor batches
+      // editingDreamId=null with editorOpen=false in the same render), so reset
+      // it unconditionally here rather than letting it gate the field clear.
+      draftRestoredRef.current = false;
+      setTitle('');
+      setDreamDate(format(new Date(), 'yyyy-MM-dd'));
+      setIsLucid(false);
+      setMoodRating(null);
+      setClarityRating(null);
+      setSelectedTags([]);
+      setWakingLifeContext('');
+      editor.commands.setContent('');
+      // After clearing, offer to restore any previously saved draft
       try {
         const raw = localStorage.getItem(DRAFT_KEY);
-        if (raw && !draftRestoredRef.current) {
+        if (raw) {
           const draft: EditorDraft = JSON.parse(raw);
           // Only restore if draft has meaningful content
           if (draft.title || draft.contentHtml?.replace(/<[^>]+>/g, '').trim()) {
@@ -225,16 +257,6 @@ export function DreamEditor() {
         }
       } catch {
         // ignore malformed draft
-      }
-      if (!draftRestoredRef.current) {
-        setTitle('');
-        setDreamDate(format(new Date(), 'yyyy-MM-dd'));
-        setIsLucid(false);
-        setMoodRating(null);
-        setClarityRating(null);
-        setSelectedTags([]);
-        setWakingLifeContext('');
-        editor.commands.setContent('');
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

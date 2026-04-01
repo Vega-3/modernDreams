@@ -36,14 +36,14 @@ const GROUP_COLORS: Record<GroupKey, string> = {
   custom: '#f59e0b',
 };
 
-// ── Physics constants (inspired by Obsidian graph view) ─────────────────────
+// ── Physics defaults ─────────────────────────────────────────────────────────
 
-const REPEL_STRENGTH = 5000;   // Coulomb-like repulsion between every node pair
-const LINK_DISTANCE  = 100;    // Spring rest length in pixels
-const LINK_STRENGTH  = 0.06;   // Spring constant
-const CENTER_GRAVITY = 0.008;  // Attraction towards canvas centre
-const DAMPING        = 0.82;   // Velocity damping per frame (0 = stop, 1 = no friction)
-const STOP_THRESHOLD = 0.08;   // Max velocity below which simulation stops
+const DEFAULT_REPEL    = 5000;   // Coulomb-like repulsion between every node pair
+const DEFAULT_LINK_STR = 0.06;  // Spring constant
+const LINK_DISTANCE    = 100;   // Spring rest length in pixels
+const CENTER_GRAVITY   = 0.008; // Attraction towards canvas centre
+const DAMPING          = 0.82;  // Velocity damping per frame (0 = stop, 1 = no friction)
+const STOP_THRESHOLD   = 0.08;  // Max velocity below which simulation stops
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +63,13 @@ export function GraphView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef        = useRef<Core | null>(null);
 
+  // Physics param refs — read by the animation tick each frame without
+  // needing to recreate the Cytoscape instance when sliders change.
+  const repelRef      = useRef(DEFAULT_REPEL);
+  const linkStrRef    = useRef(DEFAULT_LINK_STR);
+  // Exposed so the slider sync effect can re-excite a settled simulation.
+  const startSimRef   = useRef<(() => void) | null>(null);
+
   const { dreams, fetchDreams } = useDreamStore();
   const { tags, fetchTags }     = useTagStore();
   const { openEditor }          = useUIStore();
@@ -71,11 +78,20 @@ export function GraphView() {
   const [, setSelectedNode]             = useState<string | null>(null);
   const [startDate, setStartDate]       = useState<string>(oneYearAgo());
   const [endDate, setEndDate]           = useState<string>(today());
+  const [repelStrength, setRepelStrength] = useState(DEFAULT_REPEL);
+  const [linkStrength, setLinkStrength]   = useState(DEFAULT_LINK_STR);
 
   useEffect(() => {
     fetchDreams();
     fetchTags();
   }, [fetchDreams, fetchTags]);
+
+  // Sync physics slider state → refs and re-excite a settled simulation.
+  useEffect(() => {
+    repelRef.current   = repelStrength;
+    linkStrRef.current = linkStrength;
+    startSimRef.current?.();
+  }, [repelStrength, linkStrength]);
 
   // ── Toggle a visibility group ──────────────────────────────────────────────
   const toggleGroup = (group: GroupKey) => {
@@ -93,8 +109,8 @@ export function GraphView() {
     const edges: ElementDefinition[] = [];
     const tagCoOccurrence: Map<string, Map<string, number>> = new Map();
 
-    const showDreams      = !hiddenGroups.has('dreams');
-    const visibleCatSet   = new Set(
+    const showDreams    = !hiddenGroups.has('dreams');
+    const visibleCatSet = new Set(
       ALL_GROUPS.filter((g) => g !== 'dreams' && !hiddenGroups.has(g))
     );
 
@@ -114,13 +130,15 @@ export function GraphView() {
         });
       });
 
-    // Dream nodes + dream-tag edges + co-occurrence
-    if (showDreams) {
-      dreams.forEach((dream) => {
-        const dreamTags = dream.tags.filter((t) =>
-          visibleCatSet.has(t.category as GroupKey)
-        );
+    // Always compute co-occurrence from all dreams so that tag-tag edges
+    // are preserved even when dream nodes are hidden. Dream node/edge
+    // creation is still gated by showDreams.
+    dreams.forEach((dream) => {
+      const dreamTags = dream.tags.filter((t) =>
+        visibleCatSet.has(t.category as GroupKey)
+      );
 
+      if (showDreams) {
         nodes.push({
           data: {
             id: `dream-${dream.id}`,
@@ -140,21 +158,21 @@ export function GraphView() {
               type: 'dream-tag',
             },
           });
-          if (!tagCoOccurrence.has(tag.id)) tagCoOccurrence.set(tag.id, new Map());
         });
+      }
 
-        for (let i = 0; i < dreamTags.length; i++) {
-          for (let j = i + 1; j < dreamTags.length; j++) {
-            const a = dreamTags[i].id;
-            const b = dreamTags[j].id;
-            if (!tagCoOccurrence.has(a)) tagCoOccurrence.set(a, new Map());
-            if (!tagCoOccurrence.has(b)) tagCoOccurrence.set(b, new Map());
-            tagCoOccurrence.get(a)!.set(b, (tagCoOccurrence.get(a)!.get(b) ?? 0) + 1);
-            tagCoOccurrence.get(b)!.set(a, (tagCoOccurrence.get(b)!.get(a) ?? 0) + 1);
-          }
+      // Co-occurrence always computed regardless of dream visibility
+      for (let i = 0; i < dreamTags.length; i++) {
+        for (let j = i + 1; j < dreamTags.length; j++) {
+          const a = dreamTags[i].id;
+          const b = dreamTags[j].id;
+          if (!tagCoOccurrence.has(a)) tagCoOccurrence.set(a, new Map());
+          if (!tagCoOccurrence.has(b)) tagCoOccurrence.set(b, new Map());
+          tagCoOccurrence.get(a)!.set(b, (tagCoOccurrence.get(a)!.get(b) ?? 0) + 1);
+          tagCoOccurrence.get(b)!.set(a, (tagCoOccurrence.get(b)!.get(a) ?? 0) + 1);
         }
-      });
-    }
+      }
+    });
 
     // Tag-tag co-occurrence edges (threshold ≥ 2)
     const addedEdges = new Set<string>();
@@ -202,10 +220,12 @@ export function GraphView() {
 
       // Seed velocities with a small random jitter so nodes start moving
       instance.nodes().forEach((n) => {
-        velocities.set(n.id(), {
-          vx: (Math.random() - 0.5) * 3,
-          vy: (Math.random() - 0.5) * 3,
-        });
+        if (!velocities.has(n.id())) {
+          velocities.set(n.id(), {
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+          });
+        }
       });
 
       const tick = () => {
@@ -218,6 +238,11 @@ export function GraphView() {
         const ch = containerRef.current?.offsetHeight ?? 600;
         const cx = cw / 2;
         const cy = ch / 2;
+
+        // Read current physics params from refs (updated by sliders without
+        // needing to recreate the Cytoscape instance).
+        const repelStrength = repelRef.current;
+        const linkStrength  = linkStrRef.current;
 
         // Accumulate forces for each node
         const forces = new Map<string, { fx: number; fy: number }>();
@@ -236,7 +261,7 @@ export function GraphView() {
             const dy = p2.y - p1.y;
             const d2 = Math.max(dx * dx + dy * dy, 1);
             const d  = Math.sqrt(d2);
-            const f  = REPEL_STRENGTH / d2;
+            const f  = repelStrength / d2;
             const fx = (f * dx) / d;
             const fy = (f * dy) / d;
             forces.get(n1.id())!.fx -= fx;
@@ -258,7 +283,7 @@ export function GraphView() {
           const dx = p2.x - p1.x;
           const dy = p2.y - p1.y;
           const d  = Math.sqrt(dx * dx + dy * dy) || 1;
-          const f  = LINK_STRENGTH * (d - LINK_DISTANCE);
+          const f  = linkStrength * (d - LINK_DISTANCE);
           const fx = (f * dx) / d;
           const fy = (f * dy) / d;
           sf.fx += fx;
@@ -357,6 +382,9 @@ export function GraphView() {
       } as any,
     });
 
+    // Expose startSim so the slider sync effect can re-excite a settled sim.
+    startSimRef.current = () => startSim(instance);
+
     // Start physics simulation after the initial layout settles
     instance.on('layoutstop', () => startSim(instance));
 
@@ -384,6 +412,7 @@ export function GraphView() {
     cyRef.current = instance;
     return () => {
       stopSim();
+      startSimRef.current = null;
       instance.destroy();
     };
   }, [elements, openEditor]);
@@ -482,7 +511,14 @@ export function GraphView() {
           ref={containerRef}
           className="flex-1 rounded-lg border bg-card cytoscape-container min-h-0"
         />
-        <GraphStats startDate={startDate} endDate={endDate} />
+        <GraphStats
+          startDate={startDate}
+          endDate={endDate}
+          repelStrength={repelStrength}
+          linkStrength={linkStrength}
+          onRepelChange={setRepelStrength}
+          onLinkChange={setLinkStrength}
+        />
       </div>
     </div>
   );
