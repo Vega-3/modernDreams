@@ -23,7 +23,9 @@ export function Header() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-card px-6">
-      <h1 className="text-xl font-semibold">{viewTitles[currentView]}</h1>
+      <h1 className="text-xl font-black tracking-tight uppercase text-foreground">
+        {viewTitles[currentView]}
+      </h1>
 
       <div className="flex items-center gap-2">
         {/* Client filter — visible on all views when analyst mode is active and clients exist */}

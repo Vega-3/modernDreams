@@ -38,7 +38,7 @@ export function DreamCard({ dream }: DreamCardProps) {
   return (
     <>
       <Card
-        className="hover:bg-accent/50 transition-colors cursor-pointer"
+        className="dream-card card-glow cursor-pointer transition-colors"
         onClick={() => setViewerOpen(true)}
       >
         <CardHeader className="pb-2">

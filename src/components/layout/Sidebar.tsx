@@ -29,13 +29,17 @@ export function Sidebar() {
         {/* Header */}
         <div className="flex h-14 items-center border-b px-4">
           <div className={cn('flex items-center gap-2', sidebarCollapsed && 'justify-center w-full')}>
-            <Moon className="h-6 w-6 text-primary" />
-            {!sidebarCollapsed && <span className="font-semibold text-lg">Dreams</span>}
+            <Moon className="h-6 w-6 text-primary drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]" />
+            {!sidebarCollapsed && (
+              <span className="font-black text-lg tracking-tight text-foreground">
+                DREAMS
+              </span>
+            )}
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-1">
+        <nav className="flex-1 p-2 space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
@@ -47,7 +51,7 @@ export function Sidebar() {
                     <Button
                       variant={isActive ? 'secondary' : 'ghost'}
                       size="icon"
-                      className="w-full"
+                      className={cn('w-full', isActive && 'nav-item-active')}
                       onClick={() => setView(item.id)}
                     >
                       <Icon className="h-5 w-5" />
@@ -62,7 +66,10 @@ export function Sidebar() {
               <Button
                 key={item.id}
                 variant={isActive ? 'secondary' : 'ghost'}
-                className="w-full justify-start gap-3"
+                className={cn(
+                  'w-full justify-start gap-3 rounded-sm',
+                  isActive && 'nav-item-active text-primary'
+                )}
                 onClick={() => setView(item.id)}
               >
                 <Icon className="h-5 w-5" />

@@ -4,35 +4,41 @@
 
 @layer base {
   :root {
-    --background: 240 10% 4%;
-    --foreground: 240 5% 92%;
+    /* ── Persona 5 palette: deep black + vivid purple ────────────────── */
+    --background: 252 20% 4%;
+    --foreground: 252 10% 95%;
 
-    --card: 240 10% 8%;
-    --card-foreground: 240 5% 92%;
+    --card: 252 18% 7%;
+    --card-foreground: 252 10% 95%;
 
-    --popover: 240 10% 10%;
-    --popover-foreground: 240 5% 92%;
+    --popover: 252 18% 9%;
+    --popover-foreground: 252 10% 95%;
 
-    --primary: 239 84% 67%;
+    /* Vivid purple, higher saturation than the previous indigo */
+    --primary: 270 90% 62%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 10% 14%;
-    --secondary-foreground: 240 5% 92%;
+    --secondary: 252 18% 12%;
+    --secondary-foreground: 252 10% 95%;
 
-    --muted: 240 10% 14%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 252 18% 12%;
+    --muted-foreground: 252 8% 60%;
 
-    --accent: 240 10% 18%;
-    --accent-foreground: 240 5% 92%;
+    --accent: 252 18% 16%;
+    --accent-foreground: 252 10% 95%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 10% 18%;
-    --input: 240 10% 18%;
-    --ring: 239 84% 67%;
+    --border: 270 15% 20%;
+    --input: 252 18% 12%;
+    --ring: 270 90% 62%;
 
-    --radius: 0.5rem;
+    /* Sharper corners for angular Persona 5 feel */
+    --radius: 0.25rem;
+
+    /* Accent line used in asymmetric card decorations */
+    --accent-line: hsl(270 90% 62%);
   }
 }
 
@@ -182,4 +188,115 @@
   width: 100%;
   height: 100%;
   background: hsl(var(--background));
+}
+
+/* ── Persona 5 design system ─────────────────────────────────────────────── */
+
+/* Body font: slightly tighter tracking for a sharper read */
+body {
+  letter-spacing: -0.01em;
+}
+
+/* Dream cards: thick left accent stripe + angular clip on top-right */
+.dream-card {
+  border-left: 3px solid hsl(var(--primary));
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  transition: border-color 0.15s, background 0.15s;
+}
+.dream-card:hover {
+  border-left-color: hsl(var(--primary) / 0.7);
+  background: hsl(var(--accent));
+}
+
+/* Sidebar: bold left border on active nav items */
+.nav-item-active {
+  border-left: 3px solid hsl(var(--primary)) !important;
+  background: hsl(var(--accent)) !important;
+  font-weight: 700;
+}
+
+/* Header: angular right-edge accent slash */
+header {
+  position: relative;
+  overflow: hidden;
+}
+header::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--primary)),
+    hsl(270 80% 40%)
+  );
+}
+
+/* Section titles: uppercase with a coloured leading bar */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+}
+.section-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 1em;
+  background: hsl(var(--primary));
+  border-radius: 2px;
+}
+
+/* Dialog header: angular left-ruled accent */
+[role="dialog"] [data-radix-dialog-title],
+[role="dialog"] .dialog-title {
+  position: relative;
+  padding-left: 0.75rem;
+}
+[role="dialog"] [data-radix-dialog-title]::before,
+[role="dialog"] .dialog-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10%;
+  height: 80%;
+  width: 3px;
+  background: hsl(var(--primary));
+  border-radius: 2px;
+}
+
+/* Tag badges: more angular */
+.tag-badge {
+  border-radius: 2px;
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Primary button: angular with a thick top border accent */
+button[data-variant="default"],
+.btn-primary {
+  border-top: 2px solid hsl(var(--primary) / 0.6);
+}
+
+/* Card inner-glow on hover for vivid depth */
+.card-glow:hover {
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25),
+              0 4px 24px hsl(var(--primary) / 0.08);
+}
+
+/* Scrollbar: coloured thumb */
+::-webkit-scrollbar-thumb {
+  background: hsl(270 30% 25%);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.6);
 }
