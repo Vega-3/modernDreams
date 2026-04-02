@@ -8,7 +8,6 @@ import { useDreamStore } from '@/stores/dreamStore';
 
 export function JournalPage() {
   const {
-    editorOpen,
     handwritingUploadOpen,
     closeHandwritingUpload,
     handwritingPreviewOpen,
