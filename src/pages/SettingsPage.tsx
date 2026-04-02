@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { exportToObsidian, getObsidianPath, verifyApiKey, updateTag } from '@/lib/tauri';
 import { friendlyApiError } from '@/lib/apiError';
-import { useThemeStore, type ThemeId, type FontFamily } from '@/stores/themeStore';
+import { useThemeStore, FONT_STACKS, type ThemeId, type FontFamily } from '@/stores/themeStore';
 import { useTagStore } from '@/stores/tagStore';
 
 // ── Theme display metadata ────────────────────────────────────────────────────
@@ -35,12 +35,6 @@ const FONTS: { id: FontFamily; label: string; preview: string }[] = [
   { id: 'mono',     label: 'Monospace',  preview: 'The quick brown fox' },
 ];
 
-const FONT_STACK: Record<FontFamily, string> = {
-  system:   'system-ui, -apple-system, sans-serif',
-  humanist: 'Seravek, "Gill Sans Nova", Ubuntu, Calibri, sans-serif',
-  serif:    'Georgia, "Times New Roman", serif',
-  mono:     '"Courier New", Courier, monospace',
-};
 
 export function SettingsPage() {
   const [vaultPath, setVaultPath] = useState<string>('');
@@ -113,10 +107,7 @@ export function SettingsPage() {
   const handleCssFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    file.text().then((text) => {
-      setLocalCss(text);
-      setCustomCss(text);
-    });
+    file.text().then((text) => setLocalCss(text));
     // Reset so the same file can be re-uploaded after edits
     e.target.value = '';
   };
@@ -131,6 +122,8 @@ export function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
+    // Reset here (file selected) rather than on button click — avoids spurious
+    // status clears when the user opens the picker and cancels without choosing.
     setPaletteStatus('applying');
     setPaletteMessage('');
 
@@ -215,7 +208,7 @@ export function SettingsPage() {
                   <p className="text-xs text-muted-foreground">{f.label}</p>
                   <p
                     className="text-sm mt-0.5"
-                    style={{ fontFamily: FONT_STACK[f.id] }}
+                    style={{ fontFamily: FONT_STACKS[f.id] }}
                   >
                     {f.preview}
                   </p>
@@ -279,11 +272,7 @@ export function SettingsPage() {
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => {
-                  setPaletteStatus('idle');
-                  setPaletteMessage('');
-                  paletteFileRef.current?.click();
-                }}
+                onClick={() => paletteFileRef.current?.click()}
                 disabled={paletteStatus === 'applying'}
               >
                 {paletteStatus === 'applying' ? (

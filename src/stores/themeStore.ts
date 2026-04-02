@@ -6,6 +6,15 @@ export type ThemeId = 'mementos' | 'base';
 
 export type FontFamily = 'system' | 'serif' | 'mono' | 'humanist';
 
+// Single source of truth for font stacks — used by ThemeProvider (CSS rules)
+// and SettingsPage (inline style previews).
+export const FONT_STACKS: Record<FontFamily, string> = {
+  system:   'system-ui, -apple-system, sans-serif',
+  humanist: 'Seravek, "Gill Sans Nova", Ubuntu, Calibri, "DejaVu Sans", source-sans-pro, sans-serif',
+  serif:    'Georgia, "Times New Roman", serif',
+  mono:     '"Courier New", Courier, monospace',
+};
+
 interface ThemeState {
   activeTheme: ThemeId;
   fontFamily: FontFamily;

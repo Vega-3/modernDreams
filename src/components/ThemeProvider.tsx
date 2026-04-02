@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useThemeStore, type FontFamily } from '@/stores/themeStore';
+import { useThemeStore, FONT_STACKS, type FontFamily } from '@/stores/themeStore';
 
 // ── Theme CSS definitions ─────────────────────────────────────────────────────
 
@@ -79,14 +79,8 @@ button[data-variant="default"],
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 `.trim();
 
-// ── Font stack map ────────────────────────────────────────────────────────────
-
-const FONT_CSS: Record<FontFamily, string> = {
-  system:   `body { font-family: system-ui, -apple-system, sans-serif; }`,
-  serif:    `body { font-family: Georgia, "Times New Roman", serif; }`,
-  mono:     `body { font-family: "Courier New", Courier, monospace; }`,
-  humanist: `body { font-family: Seravek, "Gill Sans Nova", Ubuntu, Calibri, "DejaVu Sans", source-sans-pro, sans-serif; }`,
-};
+// Build font-family CSS rules from the shared FONT_STACKS source of truth
+const fontRule = (family: FontFamily) => `body { font-family: ${FONT_STACKS[family]}; }`;
 
 // ── IDs for injected style elements ──────────────────────────────────────────
 
@@ -125,7 +119,7 @@ export function ThemeProvider() {
 
   // Apply font override
   useEffect(() => {
-    upsertStyle(FONT_STYLE_ID, FONT_CSS[fontFamily]);
+    upsertStyle(FONT_STYLE_ID, fontRule(fontFamily));
   }, [fontFamily]);
 
   // Apply custom CSS
