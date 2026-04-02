@@ -1,13 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FolderOpen, Upload, Check, KeyRound, Loader2, X, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { exportToObsidian, verifyApiKey } from '@/lib/tauri';
+import { exportToObsidian, getObsidianPath, verifyApiKey } from '@/lib/tauri';
 import { friendlyApiError } from '@/lib/apiError';
 
 export function SettingsPage() {
+  const [vaultPath, setVaultPath] = useState<string>('');
+
+  // Load the Obsidian vault path from the Tauri backend on mount
+  useEffect(() => {
+    getObsidianPath().then(setVaultPath).catch(() => {});
+  }, []);
+
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
@@ -163,7 +170,7 @@ export function SettingsPage() {
           <div className="rounded-lg border bg-muted/50 p-4">
             <p className="text-sm font-medium mb-2">Export Location</p>
             <code className="text-sm text-muted-foreground">
-              C:\Users\globo\Desktop\Dreams\vault\
+              {vaultPath || 'Loading…'}
             </code>
           </div>
 
@@ -246,11 +253,15 @@ export function SettingsPage() {
           <div className="space-y-2">
             <p className="text-sm font-medium">Features:</p>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>- Rich text dream editor with tag mentions</li>
+              <li>- Rich text dream editor with tag mentions and grammar fixes</li>
               <li>- 5 tag categories for comprehensive organization</li>
               <li>- Calendar view for temporal patterns</li>
-              <li>- Network graph for relationship visualization</li>
+              <li>- Network graph with physics simulation and deep analytics</li>
+              <li>- Theme Analysis page with per-tag notes</li>
+              <li>- Analyst mode for multi-client dream management</li>
+              <li>- Visual customization with theme switching and custom CSS</li>
               <li>- Full-text search across all dreams</li>
+              <li>- Handwriting scan via Claude AI</li>
               <li>- Obsidian vault export</li>
             </ul>
           </div>

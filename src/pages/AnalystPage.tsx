@@ -56,9 +56,7 @@ export function AnalystPage() {
 
   const handleAddClient = () => {
     if (!newName.trim()) return;
-    const usedColors = new Set(clients.map((c) => c.color));
-    const color = CLIENT_COLORS.find((c) => !usedColors.has(c)) ?? CLIENT_COLORS[clients.length % CLIENT_COLORS.length];
-    addClient(newName, newColor || color);
+    addClient(newName, newColor);
     setNewName('');
   };
 
