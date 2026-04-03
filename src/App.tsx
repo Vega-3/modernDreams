@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import { SearchDialog } from '@/components/search/SearchDialog';
 import { DreamEditor } from '@/components/dreams/DreamEditor';
 import { JournalPage } from '@/pages/JournalPage';
@@ -49,11 +50,14 @@ function App() {
   };
 
   return (
-    <AppLayout>
-      {renderPage()}
-      <SearchDialog />
-      <DreamEditor />
-    </AppLayout>
+    <>
+      <ThemeProvider />
+      <AppLayout>
+        {renderPage()}
+        <SearchDialog />
+        <DreamEditor />
+      </AppLayout>
+    </>
   );
 }
 

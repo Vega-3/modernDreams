@@ -10,7 +10,6 @@ import { useUIStore } from '@/stores/uiStore';
 import { useAnalystStore } from '@/stores/analystStore';
 
 const viewTitles: Record<string, string> = {
-  dashboard: 'Dashboard',
   journal: 'Dream Journal',
   calendar: 'Calendar',
   graph: 'Dream Graph',

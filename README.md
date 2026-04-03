@@ -29,6 +29,7 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Inline Images**: Attach and embed images directly into dream entries via the toolbar
 - **Guide**: A built-in guide page that loads `public/GUIDE.md` — edit that file to document your own journalling workflow
 - **Analyst Mode**: Multi-client dream management for professional analysts — manage client profiles, bulk-import dreams from text files, and filter the journal by client
+- **Visual Customization**: Switch themes, change fonts, inject custom CSS, and batch-update tag colours via palette upload — all from Settings → Appearance
 
 ## Prerequisites
 
@@ -72,9 +73,10 @@ dreams/
 │   │   ├── tags/        # Picker, Badge
 │   │   ├── calendar/    # FullCalendar wrapper
 │   │   ├── graph/       # Cytoscape wrapper
-│   │   └── search/      # Search dialog
+│   │   ├── search/      # Search dialog
+│   │   └── ThemeProvider.tsx  # Runtime theme/font/CSS injection
 │   ├── pages/           # Page components
-│   ├── stores/          # Zustand stores
+│   ├── stores/          # Zustand stores (incl. themeStore)
 │   ├── hooks/           # Custom hooks
 │   └── lib/             # Utilities
 │
@@ -205,10 +207,7 @@ The SQLite database is stored in the app data directory:
 
 ## Obsidian Export
 
-Dreams can be exported to an Obsidian vault at:
-```
-C:\Users\globo\Desktop\Dreams\vault\
-```
+Dreams can be exported to an Obsidian vault. The target path is configured in the Rust backend and is displayed in **Settings → Obsidian Export**.
 
 The export creates:
 - Dream files organized by year/month
@@ -217,14 +216,50 @@ The export creates:
 - Wikilinks for navigation
 - Dataview queries for related dreams
 
+## Visual Customization
+
+The **Settings → Appearance** section provides a full suite of visual controls that apply immediately without restarting:
+
+### Themes
+
+Two built-in themes:
+
+| Theme | Description |
+|---|---|
+| **Mementos** (default) | Persona 5 maximalist — deep blacks, vivid purple, angular cards, sharp typography |
+| **Base Theme** | Clean minimal dark — indigo accent colour, rounded corners, no decorative extras |
+
+Switching themes overrides the CSS custom properties (`--primary`, `--background`, etc.) defined in `globals.css` by injecting a `<style>` tag at runtime. Selecting Mementos removes the override, restoring the base stylesheet as the source of truth.
+
+### Fonts
+
+Four font families to choose from: **System UI**, **Humanist**, **Serif**, and **Monospace**. The selected font is applied as a live body override.
+
+### Custom CSS
+
+Paste any CSS into the textarea or upload a `.css` file as a template. Changes are applied after a short debounce (400 ms) and injected after the theme styles, so custom rules override everything. Clear the field to remove all custom styles.
+
+### Tag Colour Palettes
+
+Upload a JSON file to batch-assign colours to tags:
+
+```json
+{
+  "Flying": "#a855f7",
+  "Ocean":  "#3b82f6",
+  "Chase":  "#f43f5e"
+}
+```
+
+Keys are matched against tag names (falling back to tag IDs). Matched tags are updated in the database; unmatched keys are silently ignored.
+
 ## Design
 
-The UI uses a **Persona 5-inspired** dark aesthetic: deep blacks, vivid purple as the primary
+The default UI uses a **Persona 5-inspired** dark aesthetic: deep blacks, vivid purple as the primary
 colour, sharp angular corners, and maximalist accents throughout. Key design tokens are
-defined in `src/styles/globals.css` using CSS custom properties on `:root`, so the palette
-can be adjusted in one place.
+defined in `src/styles/globals.css` using CSS custom properties on `:root`.
 
-Notable visual elements:
+Notable visual elements (Mementos theme):
 - Dream cards have a thick left purple accent stripe and a top-right polygon clip corner.
 - Active sidebar items show a bold left border and elevated weight.
 - The header uses an uppercase bold title and a right-edge gradient accent line.
