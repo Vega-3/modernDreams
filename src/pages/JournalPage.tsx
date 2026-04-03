@@ -40,7 +40,9 @@ export function JournalPage() {
   };
 
   return (
-    <>
+    /* Negative margin bleeds the background flush to the edges of <main>;
+       inner padding restores the normal content offset. */
+    <div className="journal-rings-bg -m-6 p-6" style={{ minHeight: 'calc(100vh - 3.5rem)' }}>
       <DreamList />
       <HandwritingUpload
         open={handwritingUploadOpen}
@@ -52,6 +54,6 @@ export function JournalPage() {
         onClose={handlePreviewClose}
         recognizedDreams={recognizedDreams}
       />
-    </>
+    </div>
   );
 }

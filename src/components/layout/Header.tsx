@@ -29,7 +29,7 @@ export function Header() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-card px-6">
-      <h1 className="text-xl font-black tracking-tight uppercase text-foreground">
+      <h1 className="font-p5 text-2xl tracking-tight uppercase text-foreground">
         {viewTitles[currentView]}
       </h1>
 

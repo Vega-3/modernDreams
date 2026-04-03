@@ -31,7 +31,7 @@ export function Sidebar() {
           <div className={cn('flex items-center gap-2', sidebarCollapsed && 'justify-center w-full')}>
             <Moon className="h-6 w-6 text-primary drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]" />
             {!sidebarCollapsed && (
-              <span className="font-black text-lg tracking-tight text-foreground">
+              <span className="font-p5 text-lg tracking-tight text-foreground">
                 DREAMS
               </span>
             )}

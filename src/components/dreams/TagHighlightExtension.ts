@@ -38,7 +38,7 @@ export const TagHighlight = Mark.create({
           }
           // Legacy single-tag format
           const tagId = element.getAttribute('data-tag-id');
-          const tagColor = element.getAttribute('data-tag-color') ?? '#6366f1';
+          const tagColor = element.getAttribute('data-tag-color') ?? '#de0615';
           const tagName = element.getAttribute('data-tag-name') ?? '';
           if (tagId) return [{ tagId, tagColor, tagName }];
           return [];
@@ -70,7 +70,7 @@ export const TagHighlight = Mark.create({
       tags = [];
     }
 
-    const firstColor = tags[0]?.tagColor ?? '#6366f1';
+    const firstColor = tags[0]?.tagColor ?? '#de0615';
     const borderStyle =
       tags.length > 1
         ? `border-bottom: 2px solid; border-image: linear-gradient(to right, ${tags.map((t) => t.tagColor).join(', ')}) 1;`

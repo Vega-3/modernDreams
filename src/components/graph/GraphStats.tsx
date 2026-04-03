@@ -111,9 +111,9 @@ export function GraphStats({
             <span className="text-xs font-mono">{linkStrength.toFixed(3)}</span>
           </div>
           <Slider
-            min={0.0005}
-            max={0.01}
-            step={0.0005}
+            min={0.00005}
+            max={0.005}
+            step={0.00005}
             value={[linkStrength]}
             onValueChange={([v]) => onLinkChange(v)}
           />

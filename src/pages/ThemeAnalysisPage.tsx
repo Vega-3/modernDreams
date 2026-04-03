@@ -337,7 +337,7 @@ function StarGraphPanel({
           selector: 'edge',
           style: {
             width: 'mapData(weight, 1, 10, 1, 4)',
-            'line-color': '#3f3f60',
+            'line-color': '#3d0a0d',
             'curve-style': 'bezier',
             opacity: 0.6,
           },

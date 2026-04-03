@@ -45,7 +45,12 @@ export function DreamCard({ dream }: DreamCardProps) {
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-lg">{dream.title}</h3>
+                <h3
+                  className="text-xl"
+                  style={{ fontFamily: 'Arial, sans-serif', fontWeight: 'bold', fontStyle: 'italic' }}
+                >
+                  {dream.title}
+                </h3>
                 {dream.is_lucid && <Sparkles className="h-4 w-4 text-primary" />}
               </div>
               <p className="text-sm text-muted-foreground">

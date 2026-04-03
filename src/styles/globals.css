@@ -2,43 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Persona5';
+  src: url('/fonts/Persona5MenuFontPrototype-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 @layer base {
   :root {
-    /* ── Persona 5 palette: deep black + vivid purple ────────────────── */
-    --background: 252 20% 4%;
+    /* ── Persona 5 palette: deep black + vivid red ──────────────────── */
+    --background: 252 5% 2%;
     --foreground: 252 10% 95%;
 
-    --card: 252 18% 7%;
+    --card: 252 5% 4%;
     --card-foreground: 252 10% 95%;
 
-    --popover: 252 18% 9%;
+    --popover: 252 5% 6%;
     --popover-foreground: 252 10% 95%;
 
-    /* Vivid purple, higher saturation than the previous indigo */
-    --primary: 270 90% 62%;
+    /* #de0615 → hsl(356 95% 45%) */
+    --primary: 356 95% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 252 18% 12%;
+    --secondary: 252 5% 8%;
     --secondary-foreground: 252 10% 95%;
 
-    --muted: 252 18% 12%;
-    --muted-foreground: 252 8% 60%;
+    --muted: 252 5% 8%;
+    --muted-foreground: 252 5% 55%;
 
-    --accent: 252 18% 16%;
+    --accent: 252 5% 11%;
     --accent-foreground: 252 10% 95%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 270 15% 20%;
-    --input: 252 18% 12%;
-    --ring: 270 90% 62%;
+    --border: 356 55% 22%;
+    --input: 252 5% 8%;
+    --ring: 356 95% 45%;
 
     /* Sharper corners for angular Persona 5 feel */
     --radius: 0.25rem;
 
     /* Accent line used in asymmetric card decorations */
-    --accent-line: hsl(270 90% 62%);
+    --accent-line: hsl(356 95% 45%);
   }
 }
 
@@ -183,6 +190,27 @@
   font-weight: 600;
 }
 
+/* Journal page: Persona 5 radiating concentric rings */
+.journal-rings-bg {
+  /* Two ring systems from different off-centre origins — their interference
+     creates the slightly irregular, hand-drawn quality of the P5 spiral. */
+  background:
+    repeating-radial-gradient(
+      circle at 28% 30%,
+      transparent              0px,
+      transparent              52px,
+      rgba(222, 6, 21, 0.20)  52px,
+      rgba(222, 6, 21, 0.20)  80px
+    ),
+    repeating-radial-gradient(
+      circle at 74% 72%,
+      transparent              0px,
+      transparent              66px,
+      rgba(222, 6, 21, 0.08)  66px,
+      rgba(222, 6, 21, 0.08)  88px
+    );
+}
+
 /* Cytoscape container */
 .cytoscape-container {
   width: 100%;
@@ -197,14 +225,23 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* Dream cards: thick left accent stripe + angular clip on top-right */
+/* P5 font utility */
+.font-p5 {
+  font-family: 'Persona5', sans-serif;
+}
+
+/* Dream cards: white border, thick red left accent, sharp angular corners */
 .dream-card {
-  border-left: 3px solid hsl(var(--primary));
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  border-radius: 0 !important;
+  border: 3px solid rgba(255, 255, 255, 0.88) !important;
+  border-left-width: 5px !important;
+  border-left-color: hsl(var(--primary)) !important;
+  background: hsl(var(--card));
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
   transition: border-color 0.15s, background 0.15s;
 }
 .dream-card:hover {
-  border-left-color: hsl(var(--primary) / 0.7);
+  border-left-color: hsl(var(--primary) / 0.7) !important;
   background: hsl(var(--accent));
 }
 
@@ -230,7 +267,7 @@ header::after {
   background: linear-gradient(
     to bottom,
     hsl(var(--primary)),
-    hsl(270 80% 40%)
+    hsl(356 80% 28%)
   );
 }
 
@@ -295,7 +332,7 @@ button[data-variant="default"],
 
 /* Scrollbar: coloured thumb */
 ::-webkit-scrollbar-thumb {
-  background: hsl(270 30% 25%);
+  background: hsl(356 30% 18%);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--primary) / 0.6);

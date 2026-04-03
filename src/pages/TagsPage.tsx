@@ -32,7 +32,7 @@ const categories: { id: TagCategory; label: string }[] = [
 const presetColors = [
   '#22c55e', '#3b82f6', '#a855f7', '#f43f5e', '#f59e0b',
   '#14b8a6', '#ec4899', '#8b5cf6', '#f97316', '#06b6d4',
-  '#84cc16', '#6366f1', '#d946ef', '#ef4444', '#eab308',
+  '#84cc16', '#de0615', '#d946ef', '#ef4444', '#eab308',
   '#10b981',
 ];
 
@@ -60,7 +60,7 @@ export function TagsPage() {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<TagCategory>('custom');
   const [emotiveSubcategory, setEmotiveSubcategory] = useState<string | null>(null);
-  const [color, setColor] = useState('#6366f1');
+  const [color, setColor] = useState('#de0615');
   const [description, setDescription] = useState('');
   const [aliases, setAliases] = useState('');
   const [wordAssociations, setWordAssociations] = useState<TagWordUsage[]>([]);

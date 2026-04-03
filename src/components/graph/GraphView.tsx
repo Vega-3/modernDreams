@@ -357,7 +357,7 @@ export function GraphView() {
         },
         {
           selector: 'node[type="dream"]',
-          style: { 'border-width': 2, 'border-color': '#3f3f50' },
+          style: { 'border-width': 2, 'border-color': '#3d0a0d' },
         },
         {
           selector: 'node[type="tag"]',
@@ -365,18 +365,18 @@ export function GraphView() {
         },
         {
           selector: 'edge[type="dream-tag"]',
-          style: { width: 1, 'line-color': '#3f3f50', 'curve-style': 'bezier', opacity: 0.5 },
+          style: { width: 1, 'line-color': '#ffffff', 'curve-style': 'bezier', opacity: 0.3 },
         },
         {
           selector: 'edge[type="tag-tag"]',
           style: {
             width: 'mapData(weight, 2, 10, 2, 6)',
-            'line-color': '#6366f1',
+            'line-color': '#ffffff',
             'curve-style': 'bezier',
-            opacity: 0.7,
+            opacity: 0.65,
           },
         },
-        { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#6366f1' } },
+        { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#de0615' } },
         { selector: '.faded',        style: { opacity: 0.15 } },
         { selector: '.highlighted',  style: { opacity: 1 } },
       ],
