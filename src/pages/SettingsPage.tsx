@@ -10,23 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { exportToObsidian, getObsidianPath, verifyApiKey, updateTag } from '@/lib/tauri';
 import { friendlyApiError } from '@/lib/apiError';
-import { useThemeStore, FONT_STACKS, type ThemeId, type FontFamily } from '@/stores/themeStore';
+import { useThemeStore, THEME_CONFIGS, FONT_STACKS, type ThemeId, type FontFamily } from '@/stores/themeStore';
 import { useTagStore } from '@/stores/tagStore';
-
-// ── Theme display metadata ────────────────────────────────────────────────────
-
-const THEMES: { id: ThemeId; label: string; description: string }[] = [
-  {
-    id: 'mementos',
-    label: 'Mementos',
-    description: 'Bold Persona 5 aesthetic — angular cards, vivid purple accents, maximalist energy.',
-  },
-  {
-    id: 'base',
-    label: 'Base Theme',
-    description: 'Clean minimal dark theme with indigo accents and soft rounded corners.',
-  },
-];
 
 const FONTS: { id: FontFamily; label: string; preview: string }[] = [
   { id: 'system',   label: 'System UI',  preview: 'The quick brown fox' },
@@ -94,8 +79,12 @@ export function SettingsPage() {
   };
 
   // ── Appearance ───────────────────────────────────────────────────────────
-  const { activeTheme, fontFamily, customCss, setTheme, setFontFamily, setCustomCss } = useThemeStore();
+  const {
+    activeTheme, fontFamily, customCss, backgroundImageUrl,
+    setTheme, setFontFamily, setCustomCss, setBackgroundImageUrl,
+  } = useThemeStore();
   const [localCss, setLocalCss] = useState(customCss);
+  const [localBgUrl, setLocalBgUrl] = useState(backgroundImageUrl);
   const cssFileRef = useRef<HTMLInputElement>(null);
 
   // Apply custom CSS changes after a short debounce
@@ -103,6 +92,12 @@ export function SettingsPage() {
     const t = setTimeout(() => setCustomCss(localCss), 400);
     return () => clearTimeout(t);
   }, [localCss, setCustomCss]);
+
+  // Apply background URL change after a short debounce
+  useEffect(() => {
+    const t = setTimeout(() => setBackgroundImageUrl(localBgUrl), 600);
+    return () => clearTimeout(t);
+  }, [localBgUrl, setBackgroundImageUrl]);
 
   const handleCssFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -170,7 +165,7 @@ export function SettingsPage() {
           <div className="space-y-2">
             <p className="text-sm font-medium">Theme</p>
             <div className="grid grid-cols-2 gap-3">
-              {THEMES.map((t) => (
+              {(Object.values(THEME_CONFIGS) as typeof THEME_CONFIGS[keyof typeof THEME_CONFIGS][]).map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTheme(t.id)}
@@ -183,9 +178,36 @@ export function SettingsPage() {
                 >
                   <p className="text-sm font-semibold">{t.label}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    Default font: {t.defaultFont} · Icons: {t.iconStrokeWidth}px
+                  </p>
                 </button>
               ))}
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Background image */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Background Image</p>
+            <p className="text-xs text-muted-foreground">
+              Enter a URL to use as the journal background image. Overrides the theme's default background. Leave empty to use the theme default.
+            </p>
+            <Input
+              value={localBgUrl}
+              onChange={(e) => setLocalBgUrl(e.target.value)}
+              placeholder="https://example.com/your-background.jpg"
+              className="font-mono text-xs"
+            />
+            {localBgUrl && (
+              <button
+                className="text-xs text-destructive hover:underline"
+                onClick={() => { setLocalBgUrl(''); setBackgroundImageUrl(''); }}
+              >
+                Clear background image
+              </button>
+            )}
           </div>
 
           <Separator />
