@@ -20,6 +20,9 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Tag System**: 5 categories (Location, Person, Symbolic, Emotive, Custom)
 - **Calendar View**: View dreams by date with month/week views
 - **Graph View**: Network visualization of dream-tag relationships with edge contraction (hiding dreams directly connects co-occurring tags)
+- **Paragraph-weighted graph edges**: Tags manually highlighted in the same paragraph of a dream generate a stronger graph connection (+1 weight bonus per shared paragraph) than tags that merely co-occur in the same dream entry
+- **Inline tag removal**: Hover over any tagged text in the editor to reveal a small coloured X button in the corner — click to remove that tag from just that word or phrase without affecting the tag elsewhere in the dream
+- **Draft auto-save**: The dream editor auto-saves a draft to localStorage while you write; if the app closes unexpectedly, a restore banner offers to recover your content on the next open
 - **Theme Analysis**: Cross-tag pattern analysis with custom notes per tag
 - **Full-text Search**: Quick search across all dreams (Ctrl+K)
 - **Obsidian Export**: Export to Obsidian vault with wikilinks and Dataview support
@@ -28,8 +31,9 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Auto-match Tags**: Scans the dream text and automatically applies any tags whose name appears in the content
 - **Inline Images**: Attach and embed images directly into dream entries via the toolbar
 - **Guide**: A built-in guide page that loads `public/GUIDE.md` — edit that file to document your own journalling workflow
+- **Jungian Archetypes Reference**: A comprehensive reference document (`public/ARCHETYPES.md`) covering all 12 Jungian archetypes with dream indicators, shadow forms, and professional resources — viewable from the Guide page
 - **Analyst Mode**: Multi-client dream management for professional analysts — manage client profiles, bulk-import dreams from text files, and filter the journal by client
-- **Visual Customization**: Switch themes, change fonts, inject custom CSS, and batch-update tag colours via palette upload — all from Settings → Appearance
+- **Visual Customization**: Switch themes, change fonts, inject custom CSS, set a custom background image, and batch-update tag colours via palette upload — all from Settings → Appearance
 
 ## Prerequisites
 
@@ -146,9 +150,11 @@ network analysis on the tag co-occurrence graph for any chosen date window.
 2. **Subgraph construction** — All dreams in the window are fetched along with their tags,
    forming a bipartite dream–tag graph.
 3. **Vertex contraction** — Every dream node is contracted: for each pair of tags that
-   share a dream, an edge is added (or its weight incremented by 1). The result is a
-   **weighted undirected tag co-occurrence network** represented as an adjacency matrix
-   `W[i][j]` = number of shared dreams.
+   share a dream, an edge is added (or its weight incremented by 1). Tags that are
+   manually highlighted in the **same paragraph** via the word-level tagging feature
+   receive an additional +1 bonus per shared paragraph, so frequently co-occurring
+   paragraph-level pairs surface more prominently in the graph statistics. The result
+   is a **weighted undirected tag co-occurrence network** `W[i][j]`.
 4. **Python analysis** — The adjacency matrix is passed to `src-python/graph_analysis.py`,
    which computes four families of statistics and returns the top 5 for each.
 
@@ -222,22 +228,28 @@ The **Settings → Appearance** section provides a full suite of visual controls
 
 ### Themes
 
-Two built-in themes:
+Two built-in themes, each carrying its own default font, icon stroke-width, font-size scale, and background:
 
-| Theme | Description |
-|---|---|
-| **Mementos** (default) | Persona 5 maximalist — deep blacks, vivid purple, angular cards, sharp typography |
-| **Base Theme** | Clean minimal dark — indigo accent colour, rounded corners, no decorative extras |
+| Theme | Description | Default Font | Icons |
+|---|---|---|---|
+| **Mementos** (default) | Persona 5 maximalist — deep blacks, vivid red, angular cards, sharp uppercase typography | System UI | 2.5px stroke |
+| **Base Theme** | Clean minimal dark — indigo accent colour, rounded corners, soft radial gradient background | Humanist | 1.75px stroke |
 
-Switching themes overrides the CSS custom properties (`--primary`, `--background`, etc.) defined in `globals.css` by injecting a `<style>` tag at runtime. Selecting Mementos removes the override, restoring the base stylesheet as the source of truth.
+The Base Theme restores the full pre-Persona-5 visual layout: standard heading sizes (1.75 / 1.375 / 1.125 rem), normal letter-spacing, pill-style nav items, and the original indigo colour palette.
+
+Switching themes overrides CSS custom properties and design-system rules via a runtime `<style>` tag. Selecting Mementos removes the override, restoring `globals.css` as the source of truth.
+
+### Background Image
+
+Enter any image URL in the **Background Image** field to replace the journal page background with a custom image (covers and centres automatically). Leave the field empty to use the active theme's default background.
 
 ### Fonts
 
-Four font families to choose from: **System UI**, **Humanist**, **Serif**, and **Monospace**. The selected font is applied as a live body override.
+Four font families: **System UI**, **Humanist** (Seravek / Gill Sans Nova), **Serif** (Georgia), and **Monospace** (Courier New). The selected font overrides the theme's default for the entire interface.
 
 ### Custom CSS
 
-Paste any CSS into the textarea or upload a `.css` file as a template. Changes are applied after a short debounce (400 ms) and injected after the theme styles, so custom rules override everything. Clear the field to remove all custom styles.
+Paste any CSS into the textarea or upload a `.css` file as a template. Changes apply after a 400 ms debounce and are injected after all theme styles, so custom rules override everything. Clear the field to remove custom styles.
 
 ### Tag Colour Palettes
 
@@ -252,6 +264,27 @@ Upload a JSON file to batch-assign colours to tags:
 ```
 
 Keys are matched against tag names (falling back to tag IDs). Matched tags are updated in the database; unmatched keys are silently ignored.
+
+## Jungian Archetypes Reference
+
+`public/ARCHETYPES.md` is a built-in reference document covering the **12 primary Jungian archetypes** — viewable from the Guide page (sidebar → Guide).
+
+Contents:
+- Introduction to the collective unconscious and archetypal theory
+- All 12 archetypes with descriptions, shadow forms, and specific dream indicators: Self, Shadow, Anima/Animus, Persona, Hero, Great Mother, Wise Old Man, Trickster, Child (Puer/Puella), Maiden/Kore, Father, Lover
+- Three professional reading recommendations:
+  1. Jung, *Archetypes and the Collective Unconscious* (Collected Works Vol. 9/I)
+  2. Moore & Gillette, *King, Warrior, Magician, Lover* (HarperCollins)
+  3. Hillman, *Archetypal Psychology: A Brief Account* (Spring Publications)
+- Two integration proposals for the app: an Archetype tag category and an Archetypal Dream Signature panel
+
+## Planned Features (from Issue #19)
+
+Three new features proposed for future development (see [issue #19](https://github.com/Vega-3/modernDreams/issues/19)):
+
+1. **Complex Constellation Map** — Concentric tag graph centred on a chosen figure, showing the full psychic constellation of associates by co-occurrence frequency
+2. **Dream Series Arc** — Timeline view for a named series of dreams, showing symbolic tag evolution and emotional arc across entries, with analyst annotation
+3. **Projection Audit** — Data-grounded portrait for Person tags: aggregates manually-associated words, co-occurring emotive tags, and analyst notes
 
 ## Design
 
