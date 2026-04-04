@@ -128,39 +128,44 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
  * Each mark stores a `tags` array (not a single tagId), so we must:
  *  - filter out the removed tag from the array, and
  *  - remove the mark entirely if the array becomes empty.
+ *
+ * Uses TipTap's command API (rather than direct view.dispatch) to ensure the
+ * transaction goes through TipTap's reconciliation layer and cannot throw
+ * uncaught errors back into React's render cycle.
  */
 function removeTagMarksFromEditor(editor: Editor, tagId: string) {
   try {
-    const { tr, doc, schema } = editor.state;
-    const markType = schema.marks['tagHighlight'];
-    if (!markType) return;
+    editor.chain()
+      .command(({ tr, state }) => {
+        const markType = state.schema.marks['tagHighlight'];
+        if (!markType) return false;
 
-    let changed = false;
-    doc.nodesBetween(0, doc.content.size, (node, pos) => {
-      if (!node.isText) return;
-      node.marks.forEach((mark) => {
-        if (mark.type !== markType) return;
-        const existingTags: TagRef[] = mark.attrs.tags ?? [];
-        if (!existingTags.some((t) => t.tagId === tagId)) return;
+        let changed = false;
+        state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
+          if (!node.isText) return;
+          node.marks.forEach((mark) => {
+            if (mark.type !== markType) return;
+            const existingTags: TagRef[] = mark.attrs.tags ?? [];
+            if (!existingTags.some((t) => t.tagId === tagId)) return;
 
-        const newTags = existingTags.filter((t) => t.tagId !== tagId);
-        // Remove the mark from this range unconditionally first.
-        tr.removeMark(pos, pos + node.nodeSize, markType);
-        // Re-apply with the filtered tag list if other tags remain.
-        if (newTags.length > 0) {
-          tr.addMark(
-            pos,
-            pos + node.nodeSize,
-            markType.create({ ...mark.attrs, tags: newTags }),
-          );
-        }
-        changed = true;
-      });
-    });
+            const newTags = existingTags.filter((t) => t.tagId !== tagId);
+            // Remove the mark from this range unconditionally first.
+            tr.removeMark(pos, pos + node.nodeSize, markType);
+            // Re-apply with the filtered tag list if other tags remain.
+            if (newTags.length > 0) {
+              tr.addMark(
+                pos,
+                pos + node.nodeSize,
+                markType.create({ ...mark.attrs, tags: newTags }),
+              );
+            }
+            changed = true;
+          });
+        });
 
-    if (changed) {
-      editor.view.dispatch(tr);
-    }
+        return changed;
+      })
+      .run();
   } catch (e) {
     console.warn('Failed to remove tag marks:', e);
   }
@@ -450,6 +455,10 @@ export function DreamEditor() {
 
   /** Handle tag list changes, removing editor marks for any removed tags. */
   const handleTagsChange = (newTags: Tag[]) => {
+    // Flush draft to localStorage before touching editor state so content is
+    // preserved even if the mark-removal triggers an unexpected re-render.
+    if (editorOpen && !editingDreamId) saveDraft();
+
     if (editor) {
       const removedTags = selectedTags.filter((t) => !newTags.some((n) => n.id === t.id));
       removedTags.forEach((tag) => removeTagMarksFromEditor(editor, tag.id));
