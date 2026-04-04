@@ -32,6 +32,10 @@ export type TagCategory = 'location' | 'person' | 'symbolic' | 'emotive' | 'cust
 export interface WordTagAssociation {
   tag_id: string;
   word: string;
+  /** 0-based index of the block (paragraph / heading / list item) the word
+   *  lives in.  Used by the graph builder to weight same-paragraph co-occurrences
+   *  more strongly than dream-level co-occurrences. */
+  paragraph_index: number;
 }
 
 export interface TagWordUsage {

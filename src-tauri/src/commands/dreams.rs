@@ -144,8 +144,8 @@ pub fn create_dream(
     for assoc in &input.word_tag_associations {
         let assoc_id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word) VALUES (?1, ?2, ?3, ?4)",
-            params![assoc_id, id, assoc.tag_id, assoc.word],
+            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word, paragraph_index) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![assoc_id, id, assoc.tag_id, assoc.word, assoc.paragraph_index],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -227,8 +227,8 @@ pub fn update_dream(
     for assoc in &input.word_tag_associations {
         let assoc_id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word) VALUES (?1, ?2, ?3, ?4)",
-            params![assoc_id, input.id, assoc.tag_id, assoc.word],
+            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word, paragraph_index) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![assoc_id, input.id, assoc.tag_id, assoc.word, assoc.paragraph_index],
         )
         .map_err(|e| e.to_string())?;
     }

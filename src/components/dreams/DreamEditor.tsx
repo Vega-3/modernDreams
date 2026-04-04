@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -17,6 +18,7 @@ import {
   SpellCheck,
   Wand2,
   ImagePlus,
+  X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -98,25 +100,31 @@ function applyGrammarFixes(html: string): string {
 
 function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
   const associations: WordTagAssociation[] = [];
-  editor.state.doc.descendants((node) => {
-    if (!node.isText) return;
-    node.marks.forEach((mark) => {
-      if (mark.type.name === 'tagHighlight' && node.text) {
-        // Skip auto-applied marks — only persist manual associations
-        if ((mark.attrs.source as MarkSource) === 'auto') return;
-        const word = node.text.trim();
-        if (!word) return;
-        const tags: TagRef[] = mark.attrs.tags ?? [];
-        tags.forEach(({ tagId }) => {
-          if (tagId) associations.push({ tag_id: tagId, word });
-        });
-      }
+  // Iterate top-level block nodes to track paragraph index.
+  // Each direct child of the document is a block (paragraph, heading, listItem, etc.)
+  let paragraphIndex = 0;
+  editor.state.doc.forEach((blockNode) => {
+    blockNode.descendants((node) => {
+      if (!node.isText) return;
+      node.marks.forEach((mark) => {
+        if (mark.type.name === 'tagHighlight' && node.text) {
+          // Skip auto-applied marks — only persist manual associations
+          if ((mark.attrs.source as MarkSource) === 'auto') return;
+          const word = node.text.trim();
+          if (!word) return;
+          const tags: TagRef[] = mark.attrs.tags ?? [];
+          tags.forEach(({ tagId }) => {
+            if (tagId) associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex });
+          });
+        }
+      });
     });
+    paragraphIndex++;
   });
-  // Deduplicate by tag_id + word
+  // Deduplicate by tag_id + word + paragraph_index
   const seen = new Set<string>();
-  return associations.filter(({ tag_id, word }) => {
-    const key = `${tag_id}:${word.toLowerCase()}`;
+  return associations.filter(({ tag_id, word, paragraph_index }) => {
+    const key = `${tag_id}:${word.toLowerCase()}:${paragraph_index}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -188,6 +196,17 @@ export function DreamEditor() {
   const [isSaving, setIsSaving] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const draftRestoredRef = useRef(false);
+
+  // ── Hover-X inline tag removal ────────────────────────────────────────────
+  // Tracks which tagged span is currently hovered so we can show a small X
+  // overlay that removes the tag from just that block of text.
+  const [tagHoverInfo, setTagHoverInfo] = useState<{
+    rect: DOMRect;
+    tags: TagRef[];
+    from: number;
+    to: number;
+  } | null>(null);
+  const tagHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Intentionally NOT derived as a reactive variable — we only want to read the
   // dream snapshot when editingDreamId changes (editor opens/switches), not every
@@ -316,6 +335,84 @@ export function DreamEditor() {
     editor.on('update', handler);
     return () => { editor.off('update', handler); };
   }, [editor, editorOpen, editingDreamId]);
+
+  // Set up hover listener on the TipTap editor DOM to show the inline X button
+  useEffect(() => {
+    if (!editor || !editorOpen) return;
+
+    const editorDom = editor.view.dom;
+
+    const handleMouseOver = (e: MouseEvent) => {
+      const span = (e.target as Element).closest('span[data-tags]') as HTMLElement | null;
+      if (!span) return;
+
+      const tagsAttr = span.getAttribute('data-tags');
+      if (!tagsAttr) return;
+      let tags: TagRef[] = [];
+      try { tags = JSON.parse(tagsAttr); } catch { return; }
+      if (tags.length === 0) return;
+
+      if (tagHoverTimeoutRef.current) clearTimeout(tagHoverTimeoutRef.current);
+
+      try {
+        const domPos = editor.view.posAtDOM(span, 0);
+        const domPosEnd = editor.view.posAtDOM(span, span.childNodes.length);
+        const rect = span.getBoundingClientRect();
+        setTagHoverInfo({ rect, tags, from: domPos, to: domPosEnd });
+      } catch {
+        // posAtDOM can fail if the span is outside the ProseMirror content
+      }
+    };
+
+    const handleMouseOut = (e: MouseEvent) => {
+      const related = e.relatedTarget as Element | null;
+      // Don't hide if moving into the overlay button itself
+      if (related?.closest('[data-tag-remove-overlay]')) return;
+      tagHoverTimeoutRef.current = setTimeout(() => setTagHoverInfo(null), 120);
+    };
+
+    editorDom.addEventListener('mouseover', handleMouseOver);
+    editorDom.addEventListener('mouseout', handleMouseOut);
+    return () => {
+      editorDom.removeEventListener('mouseover', handleMouseOver);
+      editorDom.removeEventListener('mouseout', handleMouseOut);
+      if (tagHoverTimeoutRef.current) clearTimeout(tagHoverTimeoutRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, editorOpen]);
+
+  /** Remove a specific tag from just the hovered span (identified by its doc range). */
+  const handleRemoveTagFromSpan = (tagId: string) => {
+    if (!editor || !tagHoverInfo) return;
+    const { from, to } = tagHoverInfo;
+    try {
+      editor.chain()
+        .command(({ tr, state }) => {
+          const markType = state.schema.marks['tagHighlight'];
+          if (!markType) return false;
+          let changed = false;
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (!node.isText) return;
+            node.marks.forEach((mark) => {
+              if (mark.type !== markType) return;
+              const existingTags: TagRef[] = mark.attrs.tags ?? [];
+              if (!existingTags.some((t) => t.tagId === tagId)) return;
+              const newTags = existingTags.filter((t) => t.tagId !== tagId);
+              tr.removeMark(pos, pos + node.nodeSize, markType);
+              if (newTags.length > 0) {
+                tr.addMark(pos, pos + node.nodeSize, markType.create({ ...mark.attrs, tags: newTags }));
+              }
+              changed = true;
+            });
+          });
+          return changed;
+        })
+        .run();
+    } catch (e) {
+      console.warn('Failed to remove tag from span:', e);
+    }
+    setTagHoverInfo(null);
+  };
 
   const restoreDraft = () => {
     try {
@@ -487,6 +584,41 @@ export function DreamEditor() {
   );
 
   return (
+    <>
+    {/* Hover-X overlay — rendered in a portal so it sits above the dialog */}
+    {tagHoverInfo && createPortal(
+      <div
+        data-tag-remove-overlay=""
+        style={{
+          position: 'fixed',
+          left: tagHoverInfo.rect.right - 10,
+          top: tagHoverInfo.rect.top - 10,
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+        onMouseEnter={() => {
+          if (tagHoverTimeoutRef.current) clearTimeout(tagHoverTimeoutRef.current);
+        }}
+        onMouseLeave={() => {
+          tagHoverTimeoutRef.current = setTimeout(() => setTagHoverInfo(null), 120);
+        }}
+      >
+        {tagHoverInfo.tags.map((tag) => (
+          <button
+            key={tag.tagId}
+            title={`Remove "${tag.tagName}" from this text`}
+            onClick={() => handleRemoveTagFromSpan(tag.tagId)}
+            style={{ backgroundColor: tag.tagColor }}
+            className="w-5 h-5 rounded-full flex items-center justify-center shadow-md opacity-90 hover:opacity-100 transition-opacity"
+          >
+            <X className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+          </button>
+        ))}
+      </div>,
+      document.body
+    )}
     <Dialog open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -773,5 +905,6 @@ export function DreamEditor() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

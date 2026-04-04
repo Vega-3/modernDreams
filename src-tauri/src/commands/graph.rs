@@ -170,28 +170,92 @@ fn build_graph_input(
         dream_tag_sets.push(tag_ids);
     }
 
-    // 3. Vertex contraction: for every pair of tags that co-appear in a dream,
-    //    increment their shared edge weight by 1.
+    // 3a. Fetch paragraph-level word-tag associations for the dreams in the
+    //     window.  Each row is (dream_id, tag_id, paragraph_index).
+    //     Two tags sharing a paragraph in the same dream get an additional +1
+    //     weight bonus over two tags that merely co-appear in the same dream.
     //
-    //    Formally: contract each dream node dₖ by adding edges between all
-    //    pairs of tags incident to dₖ, accumulating weights across dreams.
+    //     We build a map: dream_id → HashMap<paragraph_index, Vec<tag_id>>
+    let mut para_tag_map: HashMap<String, HashMap<i64, Vec<String>>> = HashMap::new();
+    for dream_id in &dream_ids {
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT tag_id, paragraph_index
+                FROM word_tag_associations
+                WHERE dream_id = ?1
+                "#,
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows: Vec<(String, i64)> = stmt
+            .query_map(params![dream_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let para_entry = para_tag_map.entry(dream_id.clone()).or_default();
+        for (tag_id, para_idx) in rows {
+            para_entry.entry(para_idx).or_default().push(tag_id);
+        }
+    }
+
+    // 3b. Vertex contraction: for every pair of tags that co-appear in a dream,
+    //     increment their shared edge weight.
+    //
+    //     Base weight per shared dream: 1.
+    //     Paragraph bonus: +1 for each paragraph in that dream where both tags
+    //     appear (via manual word associations).  This means a tag pair can
+    //     accumulate weight > 1 from a single dream if they are highlighted
+    //     together in multiple paragraphs.
+    //
+    //     Formally: contract each dream node dₖ, accumulating weights.
     let mut co_occurrence: HashMap<(String, String), u64> = HashMap::new();
     let mut tag_dream_counts: HashMap<String, u64> = HashMap::new();
 
-    for tag_ids in &dream_tag_sets {
+    for (dream_id, tag_ids) in dream_ids.iter().zip(dream_tag_sets.iter()) {
         // Individual tag frequencies (needed for Jaccard / lift in Python)
         for tag_id in tag_ids {
             *tag_dream_counts.entry(tag_id.clone()).or_insert(0) += 1;
         }
 
+        // Base co-occurrence weight (1 per shared dream)
         for i in 0..tag_ids.len() {
             for j in (i + 1)..tag_ids.len() {
-                // Canonical key: (smaller_id, larger_id) — keeps the matrix undirected
                 let a = std::cmp::min(tag_ids[i].as_str(), tag_ids[j].as_str());
                 let b = std::cmp::max(tag_ids[i].as_str(), tag_ids[j].as_str());
                 *co_occurrence
                     .entry((a.to_string(), b.to_string()))
                     .or_insert(0) += 1;
+            }
+        }
+
+        // Paragraph bonus: +1 for each paragraph where both tags are highlighted
+        if let Some(para_map) = para_tag_map.get(dream_id) {
+            for tag_ids_in_para in para_map.values() {
+                let n = tag_ids_in_para.len();
+                for i in 0..n {
+                    for j in (i + 1)..n {
+                        let a = std::cmp::min(
+                            tag_ids_in_para[i].as_str(),
+                            tag_ids_in_para[j].as_str(),
+                        );
+                        let b = std::cmp::max(
+                            tag_ids_in_para[i].as_str(),
+                            tag_ids_in_para[j].as_str(),
+                        );
+                        // Only add bonus if both tags are actually in this dream's tag set
+                        if tag_ids.contains(&tag_ids_in_para[i])
+                            && tag_ids.contains(&tag_ids_in_para[j])
+                        {
+                            *co_occurrence
+                                .entry((a.to_string(), b.to_string()))
+                                .or_insert(0) += 1;
+                        }
+                    }
+                }
             }
         }
     }

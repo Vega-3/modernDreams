@@ -22,6 +22,11 @@ pub struct Dream {
 pub struct WordTagAssociation {
     pub tag_id: String,
     pub word: String,
+    /// 0-based index of the block (paragraph / heading / list-item) the word
+    /// appears in.  Used by the graph builder to give same-paragraph tag pairs
+    /// a higher co-occurrence weight.
+    #[serde(default)]
+    pub paragraph_index: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -133,5 +133,15 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         "#,
     )?;
 
+    // Additive migration: paragraph_index on word_tag_associations.
+    // Tracks which block (paragraph / heading / list-item, 0-based) a manually
+    // tagged word lives in.  The graph builder uses this to weight same-paragraph
+    // tag co-occurrences more strongly.  Silently ignored on fresh databases
+    // that already have the column from the CREATE TABLE above.
+    let _ = conn.execute(
+        "ALTER TABLE word_tag_associations ADD COLUMN paragraph_index INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+
     Ok(())
 }
