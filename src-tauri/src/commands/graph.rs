@@ -1,7 +1,7 @@
 use crate::db::DbConnection;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write as _;
 use tauri::State;
 
@@ -170,35 +170,44 @@ fn build_graph_input(
         dream_tag_sets.push(tag_ids);
     }
 
-    // 3a. Fetch paragraph-level word-tag associations for the dreams in the
-    //     window.  Each row is (dream_id, tag_id, paragraph_index).
-    //     Two tags sharing a paragraph in the same dream get an additional +1
-    //     weight bonus over two tags that merely co-appear in the same dream.
-    //
-    //     We build a map: dream_id → HashMap<paragraph_index, Vec<tag_id>>
+    // 3a. Batch-fetch paragraph-level word-tag associations for all dreams in
+    //     the window in a single query, then partition into a map:
+    //       dream_id → HashMap<paragraph_index, Vec<tag_id>>
+    //     Two tags sharing a paragraph get a +1 bonus on top of the base +1
+    //     they receive for sharing a dream.
     let mut para_tag_map: HashMap<String, HashMap<i64, Vec<String>>> = HashMap::new();
-    for dream_id in &dream_ids {
-        let mut stmt = conn
-            .prepare(
-                r#"
-                SELECT tag_id, paragraph_index
-                FROM word_tag_associations
-                WHERE dream_id = ?1
-                "#,
-            )
-            .map_err(|e| e.to_string())?;
+    if !dream_ids.is_empty() {
+        // Build "?,?,..." placeholders for the IN clause
+        let placeholders = dream_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT dream_id, tag_id, paragraph_index FROM word_tag_associations WHERE dream_id IN ({placeholders})"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
 
-        let rows: Vec<(String, i64)> = stmt
-            .query_map(params![dream_id], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        let rows: Vec<(String, String, i64)> = stmt
+            .query_map(rusqlite::params_from_iter(dream_ids.iter()), |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
             })
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
             .collect();
 
-        let para_entry = para_tag_map.entry(dream_id.clone()).or_default();
-        for (tag_id, para_idx) in rows {
-            para_entry.entry(para_idx).or_default().push(tag_id);
+        for (dream_id, tag_id, para_idx) in rows {
+            para_tag_map
+                .entry(dream_id)
+                .or_default()
+                .entry(para_idx)
+                .or_default()
+                .push(tag_id);
         }
     }
 
@@ -206,12 +215,9 @@ fn build_graph_input(
     //     increment their shared edge weight.
     //
     //     Base weight per shared dream: 1.
-    //     Paragraph bonus: +1 for each paragraph in that dream where both tags
-    //     appear (via manual word associations).  This means a tag pair can
-    //     accumulate weight > 1 from a single dream if they are highlighted
-    //     together in multiple paragraphs.
-    //
-    //     Formally: contract each dream node dₖ, accumulating weights.
+    //     Paragraph bonus: +1 for each paragraph where both tags appear via
+    //     manual word associations.  A pair highlighted together in multiple
+    //     paragraphs accumulates weight > 1 from a single dream.
     let mut co_occurrence: HashMap<(String, String), u64> = HashMap::new();
     let mut tag_dream_counts: HashMap<String, u64> = HashMap::new();
 
@@ -232,28 +238,25 @@ fn build_graph_input(
             }
         }
 
-        // Paragraph bonus: +1 for each paragraph where both tags are highlighted
+        // Paragraph bonus: +1 for each paragraph where both tags are highlighted.
+        // Use a HashSet for O(1) membership checks in the inner loop.
         if let Some(para_map) = para_tag_map.get(dream_id) {
+            let dream_tag_set: HashSet<&str> = tag_ids.iter().map(|s| s.as_str()).collect();
             for tag_ids_in_para in para_map.values() {
-                let n = tag_ids_in_para.len();
+                // Filter to tags actually on the dream (ignore dangling WTA rows)
+                let para_tags: Vec<&str> = tag_ids_in_para
+                    .iter()
+                    .map(|s| s.as_str())
+                    .filter(|id| dream_tag_set.contains(id))
+                    .collect();
+                let n = para_tags.len();
                 for i in 0..n {
                     for j in (i + 1)..n {
-                        let a = std::cmp::min(
-                            tag_ids_in_para[i].as_str(),
-                            tag_ids_in_para[j].as_str(),
-                        );
-                        let b = std::cmp::max(
-                            tag_ids_in_para[i].as_str(),
-                            tag_ids_in_para[j].as_str(),
-                        );
-                        // Only add bonus if both tags are actually in this dream's tag set
-                        if tag_ids.contains(&tag_ids_in_para[i])
-                            && tag_ids.contains(&tag_ids_in_para[j])
-                        {
-                            *co_occurrence
-                                .entry((a.to_string(), b.to_string()))
-                                .or_insert(0) += 1;
-                        }
+                        let a = std::cmp::min(para_tags[i], para_tags[j]);
+                        let b = std::cmp::max(para_tags[i], para_tags[j]);
+                        *co_occurrence
+                            .entry((a.to_string(), b.to_string()))
+                            .or_insert(0) += 1;
                     }
                 }
             }

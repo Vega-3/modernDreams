@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { exportToObsidian, getObsidianPath, verifyApiKey, updateTag } from '@/lib/tauri';
 import { friendlyApiError } from '@/lib/apiError';
-import { useThemeStore, THEME_CONFIGS, FONT_STACKS, type ThemeId, type FontFamily } from '@/stores/themeStore';
+import { useThemeStore, THEME_CONFIGS, FONT_STACKS, type ThemeConfig, type ThemeId, type FontFamily } from '@/stores/themeStore';
 import { useTagStore } from '@/stores/tagStore';
 
 const FONTS: { id: FontFamily; label: string; preview: string }[] = [
@@ -165,7 +165,7 @@ export function SettingsPage() {
           <div className="space-y-2">
             <p className="text-sm font-medium">Theme</p>
             <div className="grid grid-cols-2 gap-3">
-              {(Object.values(THEME_CONFIGS) as typeof THEME_CONFIGS[keyof typeof THEME_CONFIGS][]).map((t) => (
+              {(Object.values(THEME_CONFIGS) as ThemeConfig[]).map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTheme(t.id)}

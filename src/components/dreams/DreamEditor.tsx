@@ -132,47 +132,42 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
 }
 
 /**
- * Remove a specific tag from all tagHighlight marks in the editor.
- * Each mark stores a `tags` array (not a single tagId), so we must:
- *  - filter out the removed tag from the array, and
- *  - remove the mark entirely if the array becomes empty.
+ * TipTap command that removes one tag from all tagHighlight marks in [from, to].
+ * Pass from=0, to=doc.content.size to operate on the whole document.
  *
- * Uses TipTap's command API (rather than direct view.dispatch) to ensure the
- * transaction goes through TipTap's reconciliation layer and cannot throw
- * uncaught errors back into React's render cycle.
+ * Using the command API (not editor.view.dispatch) keeps the transaction inside
+ * TipTap's reconciliation layer and prevents uncaught errors in React's cycle.
  */
+function makeRemoveTagCommand(tagId: string, from: number, to: number) {
+  return ({ tr, state }: { tr: import('@tiptap/pm/state').Transaction; state: import('@tiptap/pm/state').EditorState }) => {
+    const markType = state.schema.marks['tagHighlight'];
+    if (!markType) return false;
+
+    let changed = false;
+    state.doc.nodesBetween(from, to, (node, pos) => {
+      if (!node.isText) return;
+      node.marks.forEach((mark) => {
+        if (mark.type !== markType) return;
+        const existingTags: TagRef[] = mark.attrs.tags ?? [];
+        if (!existingTags.some((t) => t.tagId === tagId)) return;
+
+        const newTags = existingTags.filter((t) => t.tagId !== tagId);
+        tr.removeMark(pos, pos + node.nodeSize, markType);
+        if (newTags.length > 0) {
+          tr.addMark(pos, pos + node.nodeSize, markType.create({ ...mark.attrs, tags: newTags }));
+        }
+        changed = true;
+      });
+    });
+
+    return changed;
+  };
+}
+
 function removeTagMarksFromEditor(editor: Editor, tagId: string) {
   try {
     editor.chain()
-      .command(({ tr, state }) => {
-        const markType = state.schema.marks['tagHighlight'];
-        if (!markType) return false;
-
-        let changed = false;
-        state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
-          if (!node.isText) return;
-          node.marks.forEach((mark) => {
-            if (mark.type !== markType) return;
-            const existingTags: TagRef[] = mark.attrs.tags ?? [];
-            if (!existingTags.some((t) => t.tagId === tagId)) return;
-
-            const newTags = existingTags.filter((t) => t.tagId !== tagId);
-            // Remove the mark from this range unconditionally first.
-            tr.removeMark(pos, pos + node.nodeSize, markType);
-            // Re-apply with the filtered tag list if other tags remain.
-            if (newTags.length > 0) {
-              tr.addMark(
-                pos,
-                pos + node.nodeSize,
-                markType.create({ ...mark.attrs, tags: newTags }),
-              );
-            }
-            changed = true;
-          });
-        });
-
-        return changed;
-      })
+      .command(makeRemoveTagCommand(tagId, 0, editor.state.doc.content.size))
       .run();
   } catch (e) {
     console.warn('Failed to remove tag marks:', e);
@@ -384,29 +379,9 @@ export function DreamEditor() {
   /** Remove a specific tag from just the hovered span (identified by its doc range). */
   const handleRemoveTagFromSpan = (tagId: string) => {
     if (!editor || !tagHoverInfo) return;
-    const { from, to } = tagHoverInfo;
     try {
       editor.chain()
-        .command(({ tr, state }) => {
-          const markType = state.schema.marks['tagHighlight'];
-          if (!markType) return false;
-          let changed = false;
-          state.doc.nodesBetween(from, to, (node, pos) => {
-            if (!node.isText) return;
-            node.marks.forEach((mark) => {
-              if (mark.type !== markType) return;
-              const existingTags: TagRef[] = mark.attrs.tags ?? [];
-              if (!existingTags.some((t) => t.tagId === tagId)) return;
-              const newTags = existingTags.filter((t) => t.tagId !== tagId);
-              tr.removeMark(pos, pos + node.nodeSize, markType);
-              if (newTags.length > 0) {
-                tr.addMark(pos, pos + node.nodeSize, markType.create({ ...mark.attrs, tags: newTags }));
-              }
-              changed = true;
-            });
-          });
-          return changed;
-        })
+        .command(makeRemoveTagCommand(tagId, tagHoverInfo.from, tagHoverInfo.to))
         .run();
     } catch (e) {
       console.warn('Failed to remove tag from span:', e);
