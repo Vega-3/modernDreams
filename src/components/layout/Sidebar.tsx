@@ -7,7 +7,7 @@ import { useUIStore } from '@/stores/uiStore';
 const navItems = [
   { id: 'journal' as const, icon: BookOpen, label: 'Journal' },
   { id: 'calendar' as const, icon: Calendar, label: 'Calendar' },
-  { id: 'graph' as const, icon: Network, label: 'Graph' },
+  { id: 'graph' as const, icon: Network, label: 'Constellation' },
   { id: 'tags' as const, icon: Tags, label: 'Tags' },
   { id: 'theme' as const, icon: Microscope, label: 'Theme Analysis' },
   { id: 'analyst' as const, icon: Briefcase, label: 'Analyst' },

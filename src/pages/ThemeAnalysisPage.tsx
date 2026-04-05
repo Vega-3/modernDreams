@@ -117,8 +117,8 @@ export function ThemeAnalysisPage() {
             onSelectDream={setSelectedDream}
           />
 
-          {/* Panel 3 — Star graph */}
-          <StarGraphPanel tag={selectedTag} dreams={tagDreams} allTags={tags} />
+          {/* Panel 3 — Constellation */}
+          <ConstellationPanel tag={selectedTag} dreams={tagDreams} allTags={tags} />
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
@@ -232,9 +232,12 @@ function DreamPanel({
   );
 }
 
-// ── Panel 3: Star graph ───────────────────────────────────────────────────────
+// ── Panel 3: Constellation ────────────────────────────────────────────────────
+// Tags are arranged concentrically by co-occurrence frequency:
+// the innermost ring holds the closest psychological associates,
+// the outer rings hold peripheral resonances.
 
-function StarGraphPanel({
+function ConstellationPanel({
   tag,
   dreams,
   allTags,
@@ -247,8 +250,6 @@ function StarGraphPanel({
   const cyRef = useRef<Core | null>(null);
 
   // Compute co-occurring tags and edge weights from the dreams list.
-  // useMemo (not useRef+useEffect) so the value is ready at render time,
-  // which ensures the container div is mounted before the Cytoscape effect runs.
   const coTagMap = useMemo(() => {
     const map = new Map<string, { tag: Tag; weight: number }>();
     const tagById = new Map(allTags.map((t) => [t.id, t]));
@@ -274,6 +275,18 @@ function StarGraphPanel({
     const centerColor = getCategoryColor(tag.category);
     const coEntries = Array.from(coTagMap.entries());
 
+    // Assign concentric levels by co-occurrence frequency.
+    // Higher weight = lower level number = placed on inner ring.
+    const maxWeight = coEntries.reduce((m, [, { weight }]) => Math.max(m, weight), 1);
+
+    // Map weight to a concentric level: innermost ring = 3, middle = 2, outer = 1
+    const getLevel = (weight: number): number => {
+      const ratio = weight / maxWeight;
+      if (ratio >= 0.66) return 3;
+      if (ratio >= 0.33) return 2;
+      return 1;
+    };
+
     const nodes = [
       {
         data: {
@@ -281,6 +294,7 @@ function StarGraphPanel({
           label: tag.name,
           color: centerColor,
           size: 36,
+          level: 10, // center is always innermost
           isCenter: true,
         },
       },
@@ -289,8 +303,9 @@ function StarGraphPanel({
           id,
           label: ct.name,
           color: getCategoryColor(ct.category),
-          size: Math.max(18, Math.min(30, 14 + weight * 3)),
+          size: Math.max(16, Math.min(28, 12 + weight * 2.5)),
           weight,
+          level: getLevel(weight),
         },
       })),
     ];
@@ -339,7 +354,7 @@ function StarGraphPanel({
             width: 'mapData(weight, 1, 10, 1, 4)',
             'line-color': '#3d0a0d',
             'curve-style': 'bezier',
-            opacity: 0.6,
+            opacity: 0.5,
           },
         },
       ],
@@ -347,11 +362,16 @@ function StarGraphPanel({
         coEntries.length === 0
           ? { name: 'grid' }
           : {
-              name: 'breadthfirst',
-              roots: ['center'],
-              circle: true,
-              directed: false,
-              padding: 24,
+              name: 'concentric',
+              concentric: (node: { data: (key: string) => number }) => node.data('level'),
+              levelWidth: () => 1,
+              minNodeSpacing: 20,
+              padding: 28,
+              startAngle: (3 / 2) * Math.PI,
+              sweep: undefined,
+              clockwise: true,
+              equidistant: false,
+              avoidOverlap: true,
             },
     });
 
@@ -362,7 +382,7 @@ function StarGraphPanel({
   return (
     <Card className="flex flex-col overflow-hidden p-3 gap-2">
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-sm font-semibold">Co-occurrence Network</span>
+        <span className="text-sm font-semibold">Constellation</span>
         <span className="text-xs text-muted-foreground ml-auto">
           {coTagMap.size} connected tag{coTagMap.size !== 1 ? 's' : ''}
         </span>
@@ -372,10 +392,15 @@ function StarGraphPanel({
           No co-occurring tags found for this theme.
         </p>
       ) : (
-        <div
-          ref={containerRef}
-          className="flex-1 rounded-md border bg-card min-h-0 cytoscape-container"
-        />
+        <>
+          <div
+            ref={containerRef}
+            className="flex-1 rounded-md border bg-card min-h-0 cytoscape-container"
+          />
+          <p className="text-[10px] text-muted-foreground/60 shrink-0 text-center">
+            Inner rings = closest associates · Outer rings = peripheral resonances
+          </p>
+        </>
       )}
     </Card>
   );
