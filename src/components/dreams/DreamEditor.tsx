@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
+import { useArchetypeStore } from '@/stores/archetypeStore';
 import type { Tag, WordTagAssociation } from '@/lib/tauri';
 import type { Editor } from '@tiptap/core';
 
@@ -178,6 +179,7 @@ export function DreamEditor() {
   const { editorOpen, editingDreamId, closeEditor } = useUIStore();
   const { dreams, createDream, updateDream } = useDreamStore();
   const allTags = useTagStore((state) => state.tags);
+  const { archetypes, dreamArchetypeMap, setDreamArchetypes } = useArchetypeStore();
 
   const [title, setTitle] = useState('');
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -186,6 +188,7 @@ export function DreamEditor() {
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [clarityRating, setClarityRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>([]);
   const [wakingLifeContext, setWakingLifeContext] = useState('');
   const [analysisNotes, setAnalysisNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -249,6 +252,7 @@ export function DreamEditor() {
       setMoodRating(editingDream.mood_rating);
       setClarityRating(editingDream.clarity_rating);
       setSelectedTags(editingDream.tags);
+      setSelectedArchetypeIds(dreamArchetypeMap[editingDream.id] ?? []);
       setWakingLifeContext(editingDream.waking_life_context || '');
       setAnalysisNotes(editingDream.analysis_notes || '');
       editor.commands.setContent(editingDream.content_html);
@@ -263,6 +267,7 @@ export function DreamEditor() {
       setMoodRating(null);
       setClarityRating(null);
       setSelectedTags([]);
+      setSelectedArchetypeIds([]);
       setWakingLifeContext('');
       setAnalysisNotes('');
       editor.commands.setContent('');
@@ -427,6 +432,7 @@ export function DreamEditor() {
       const wordTagAssociations = extractWordTagAssociations(editor);
 
       if (editingDreamId) {
+        setDreamArchetypes(editingDreamId, selectedArchetypeIds);
         await updateDream({
           id: editingDreamId,
           title: title.trim(),
@@ -442,7 +448,7 @@ export function DreamEditor() {
           word_tag_associations: wordTagAssociations,
         });
       } else {
-        await createDream({
+        const newDream = await createDream({
           title: title.trim(),
           content_html: contentHtml,
           content_plain: contentPlain,
@@ -455,6 +461,7 @@ export function DreamEditor() {
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
         });
+        setDreamArchetypes(newDream.id, selectedArchetypeIds);
         // Clear draft on successful save
         localStorage.removeItem(DRAFT_KEY);
       }
@@ -669,6 +676,39 @@ export function DreamEditor() {
               </Button>
             </div>
             <TagPicker selectedTags={selectedTags} onTagsChange={handleTagsChange} />
+          </div>
+
+          {/* Archetypes */}
+          <div className="space-y-2">
+            <Label>Archetypes</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {archetypes.map((archetype) => {
+                const isActive = selectedArchetypeIds.includes(archetype.id);
+                return (
+                  <button
+                    key={archetype.id}
+                    type="button"
+                    onClick={() =>
+                      setSelectedArchetypeIds((prev) =>
+                        isActive ? prev.filter((id) => id !== archetype.id) : [...prev, archetype.id]
+                      )
+                    }
+                    className={cn(
+                      'px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                      isActive ? 'ring-2 ring-offset-1 ring-current' : 'opacity-60 hover:opacity-100'
+                    )}
+                    style={{
+                      backgroundColor: archetype.color + '22',
+                      color: archetype.color,
+                      borderColor: archetype.color + '88',
+                    }}
+                    title={archetype.description}
+                  >
+                    {archetype.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Waking Life Context */}
