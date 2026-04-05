@@ -115,12 +115,7 @@ The key is stored in browser localStorage and is sent only to Anthropic's API en
 
 ## Guide
 
-The **Guide** page (sidebar → Guide) displays `public/GUIDE.md`. Edit that file with your own notes on:
-
-- How to record dreams effectively
-- Your personal tagging conventions
-- Tips for using the handwriting scanner
-- Any other workflow notes
+The **Guide** page (sidebar → Guide) displays `public/GUIDE.md`.
 
 ## Graph View
 
@@ -269,15 +264,6 @@ Keys are matched against tag names (falling back to tag IDs). Matched tags are u
 
 `public/ARCHETYPES.md` is a built-in reference document covering the **12 primary Jungian archetypes** — viewable from the Guide page (sidebar → Guide).
 
-Contents:
-- Introduction to the collective unconscious and archetypal theory
-- All 12 archetypes with descriptions, shadow forms, and specific dream indicators: Self, Shadow, Anima/Animus, Persona, Hero, Great Mother, Wise Old Man, Trickster, Child (Puer/Puella), Maiden/Kore, Father, Lover
-- Three professional reading recommendations:
-  1. Jung, *Archetypes and the Collective Unconscious* (Collected Works Vol. 9/I)
-  2. Moore & Gillette, *King, Warrior, Magician, Lover* (HarperCollins)
-  3. Hillman, *Archetypal Psychology: A Brief Account* (Spring Publications)
-- Two integration proposals for the app: an Archetype tag category and an Archetypal Dream Signature panel
-
 ## Planned Features (from Issue #19)
 
 Three new features proposed for future development (see [issue #19](https://github.com/Vega-3/modernDreams/issues/19)):
@@ -286,17 +272,6 @@ Three new features proposed for future development (see [issue #19](https://gith
 2. **Dream Series Arc** — Timeline view for a named series of dreams, showing symbolic tag evolution and emotional arc across entries, with analyst annotation
 3. **Projection Audit** — Data-grounded portrait for Person tags: aggregates manually-associated words, co-occurring emotive tags, and analyst notes
 
-## Design
-
-The default UI uses a **Persona 5-inspired** dark aesthetic: deep blacks, vivid purple as the primary
-colour, sharp angular corners, and maximalist accents throughout. Key design tokens are
-defined in `src/styles/globals.css` using CSS custom properties on `:root`.
-
-Notable visual elements (Mementos theme):
-- Dream cards have a thick left purple accent stripe and a top-right polygon clip corner.
-- Active sidebar items show a bold left border and elevated weight.
-- The header uses an uppercase bold title and a right-edge gradient accent line.
-- Dialog titles carry a left-rule purple bar for strong visual hierarchy.
 
 ## License
 
