@@ -1,11 +1,12 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { Plus, Trash2, Lightbulb, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Lightbulb, X, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSeriesStore, suggestSeriesFromDreams, type DreamSeries } from '@/stores/seriesStore';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -87,57 +88,47 @@ function TagEvolution({ series, dreamMap }: { series: DreamSeries; dreamMap: Map
 
   if (seriesDreams.length === 0) return null;
 
-  // Count symbolic tag appearances per dream position
-  const symbolCounts = new Map<string, { name: string; color: string; count: number; first: number; last: number }>();
+  // Count ALL tag appearances (all categories are symbolic carriers)
+  const tagCounts = new Map<string, { name: string; color: string; count: number; presentIn: Set<number> }>();
   seriesDreams.forEach((dream, i) => {
-    dream.tags
-      .filter((t) => t.category === 'symbolic')
-      .forEach((tag) => {
-        const existing = symbolCounts.get(tag.id);
-        if (existing) {
-          existing.count++;
-          existing.last = i;
-        } else {
-          symbolCounts.set(tag.id, { name: tag.name, color: tag.color, count: 1, first: i, last: i });
-        }
-      });
+    dream.tags.forEach((tag) => {
+      const existing = tagCounts.get(tag.id);
+      if (existing) {
+        existing.count++;
+        existing.presentIn.add(i);
+      } else {
+        tagCounts.set(tag.id, { name: tag.name, color: tag.color, count: 1, presentIn: new Set([i]) });
+      }
+    });
   });
 
-  const sorted = [...symbolCounts.values()].sort((a, b) => b.count - a.count).slice(0, 8);
+  // Only show tags that appear in more than one dream (longitudinal interest)
+  const sorted = [...tagCounts.values()]
+    .filter((t) => t.count > 1)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 
   if (sorted.length === 0) return null;
 
   return (
     <div className="mt-3">
-      <p className="text-[11px] text-muted-foreground font-medium mb-1.5">Symbolic tag evolution</p>
-      <div className="space-y-1">
+      <p className="text-[11px] text-muted-foreground font-medium mb-2">Tag overlap across series</p>
+      <div className="flex flex-wrap gap-1.5">
         {sorted.map((tag) => (
-          <div key={tag.name} className="flex items-center gap-2">
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: tag.color }}
-            />
-            <span className="text-[11px] w-24 truncate shrink-0" title={tag.name}>
-              {tag.name}
-            </span>
-            {/* Show which positions the tag appears at */}
-            <div className="flex gap-0.5 flex-1">
-              {seriesDreams.map((_, i) => {
-                const present = seriesDreams[i].tags.some(
-                  (t) => t.category === 'symbolic' && t.name === tag.name
-                );
-                return (
-                  <div
-                    key={i}
-                    className="h-2 flex-1 rounded-sm"
-                    style={{ backgroundColor: present ? tag.color : 'transparent', border: `1px solid ${tag.color}40` }}
-                  />
-                );
-              })}
-            </div>
-            <span className="text-[10px] text-muted-foreground w-4 text-right shrink-0">
-              {tag.count}×
-            </span>
+          <div
+            key={tag.name}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+            style={{ backgroundColor: tag.color + '22', color: tag.color, border: `1px solid ${tag.color}55` }}
+            title={`Appears in ${tag.count} of ${seriesDreams.length} dreams`}
+          >
+            <span>{tag.name}</span>
+            <Badge
+              variant="secondary"
+              className="h-3.5 px-1 text-[9px] font-bold leading-none"
+              style={{ backgroundColor: tag.color + '33', color: tag.color }}
+            >
+              {tag.count}
+            </Badge>
           </div>
         ))}
       </div>
@@ -152,6 +143,7 @@ function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allD
     useSeriesStore();
   const [expanded, setExpanded] = useState(true);
   const [showAddDream, setShowAddDream] = useState(false);
+  const [dreamSearch, setDreamSearch] = useState('');
   const [interpretation, setLocalInterp] = useState(series.interpretation);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -162,7 +154,12 @@ function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allD
   };
 
   const seriesDreamIds = new Set(series.dreamIds);
-  const availableDreams = allDreams.filter((d) => !seriesDreamIds.has(d.id));
+  const availableDreams = allDreams.filter((d) => {
+    if (seriesDreamIds.has(d.id)) return false;
+    if (!dreamSearch.trim()) return true;
+    const q = dreamSearch.toLowerCase();
+    return d.title.toLowerCase().includes(q) || d.tags.some((t) => t.name.toLowerCase().includes(q));
+  });
 
   return (
     <Card>
@@ -236,21 +233,34 @@ function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allD
           </Button>
 
           {showAddDream && (
-            <div className="rounded-md border bg-muted/20 p-2 max-h-40 overflow-y-auto space-y-1">
-              {availableDreams.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground italic">All dreams are already in this series.</p>
-              ) : (
-                availableDreams.slice(0, 30).map((dream) => (
-                  <button
-                    key={dream.id}
-                    className="flex items-center gap-2 w-full text-left hover:bg-muted/40 rounded px-2 py-1 text-xs transition-colors"
-                    onClick={() => { addDreamToSeries(series.id, dream.id); }}
-                  >
-                    <span className="flex-1 truncate">{dream.title}</span>
-                    <span className="text-muted-foreground/60 text-[10px] shrink-0">{dream.dream_date}</span>
-                  </button>
-                ))
-              )}
+            <div className="rounded-md border bg-muted/20 p-2 space-y-1.5">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <input
+                  className="w-full h-6 pl-6 pr-2 text-[11px] rounded bg-muted/30 border border-muted/50 focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder="Search by title or tag…"
+                  value={dreamSearch}
+                  onChange={(e) => setDreamSearch(e.target.value)}
+                />
+              </div>
+              <div className="max-h-36 overflow-y-auto space-y-0.5">
+                {availableDreams.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic px-1">
+                    {dreamSearch ? 'No matching dreams.' : 'All dreams are already in this series.'}
+                  </p>
+                ) : (
+                  availableDreams.slice(0, 40).map((dream) => (
+                    <button
+                      key={dream.id}
+                      className="flex items-center gap-2 w-full text-left hover:bg-muted/40 rounded px-2 py-1 text-xs transition-colors"
+                      onClick={() => { addDreamToSeries(series.id, dream.id); }}
+                    >
+                      <span className="flex-1 truncate">{dream.title}</span>
+                      <span className="text-muted-foreground/60 text-[10px] shrink-0">{dream.dream_date}</span>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           )}
 
