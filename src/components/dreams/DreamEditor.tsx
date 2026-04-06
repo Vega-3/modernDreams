@@ -377,7 +377,10 @@ export function DreamEditor() {
 
       try {
         const domPos = editor.view.posAtDOM(span, 0);
-        const domPosEnd = editor.view.posAtDOM(span, span.childNodes.length);
+        // Use textContent length to compute end position — posAtDOM(span, childCount)
+        // can be unreliable for mark-rendered spans; text length is always exact.
+        const textLen = span.textContent?.length ?? 0;
+        const domPosEnd = domPos + textLen;
         const rect = span.getBoundingClientRect();
         setTagHoverInfo({ rect, tags, from: domPos, to: domPosEnd });
       } catch {
