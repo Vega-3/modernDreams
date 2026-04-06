@@ -8,6 +8,15 @@ interface RecognizedDream {
   imagePreview: string;
 }
 
+export interface ImportQueueItem {
+  title: string;
+  contentHtml: string;
+  contentPlain: string;
+  date: string;
+  clientId: string;
+  clientName: string;
+}
+
 interface UIState {
   currentView: View;
   sidebarCollapsed: boolean;
@@ -17,6 +26,10 @@ interface UIState {
   handwritingUploadOpen: boolean;
   handwritingPreviewOpen: boolean;
   recognizedDreams: RecognizedDream[];
+
+  // Bulk-import queue (professional mode)
+  importQueue: ImportQueueItem[];
+  importQueueIndex: number;
 
   // Actions
   setView: (view: View) => void;
@@ -30,9 +43,14 @@ interface UIState {
   setRecognizedDreams: (dreams: RecognizedDream[]) => void;
   openHandwritingPreview: () => void;
   closeHandwritingPreview: () => void;
+
+  // Queue actions
+  startImportQueue: (items: ImportQueueItem[]) => void;
+  advanceImportQueue: () => void;
+  clearImportQueue: () => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = create<UIState>((set, get) => ({
   currentView: 'journal',
   sidebarCollapsed: false,
   searchOpen: false,
@@ -41,6 +59,8 @@ export const useUIStore = create<UIState>((set) => ({
   handwritingUploadOpen: false,
   handwritingPreviewOpen: false,
   recognizedDreams: [],
+  importQueue: [],
+  importQueueIndex: 0,
 
   setView: (view) => set({ currentView: view }),
 
@@ -59,4 +79,18 @@ export const useUIStore = create<UIState>((set) => ({
 
   openHandwritingPreview: () => set({ handwritingPreviewOpen: true }),
   closeHandwritingPreview: () => set({ handwritingPreviewOpen: false, recognizedDreams: [] }),
+
+  startImportQueue: (items) => set({ importQueue: items, importQueueIndex: 0, editorOpen: items.length > 0 }),
+
+  advanceImportQueue: () => {
+    const { importQueueIndex, importQueue } = get();
+    const next = importQueueIndex + 1;
+    if (next < importQueue.length) {
+      set({ importQueueIndex: next, editorOpen: true });
+    } else {
+      set({ importQueue: [], importQueueIndex: 0, editorOpen: false });
+    }
+  },
+
+  clearImportQueue: () => set({ importQueue: [], importQueueIndex: 0 }),
 }));

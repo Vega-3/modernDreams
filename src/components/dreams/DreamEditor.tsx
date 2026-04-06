@@ -43,6 +43,7 @@ import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useArchetypeStore } from '@/stores/archetypeStore';
+import { useAnalystStore, clientPrefix } from '@/stores/analystStore';
 import type { Tag, WordTagAssociation } from '@/lib/tauri';
 import type { Editor } from '@tiptap/core';
 
@@ -176,10 +177,14 @@ function removeTagMarksFromEditor(editor: Editor, tagId: string) {
 }
 
 export function DreamEditor() {
-  const { editorOpen, editingDreamId, closeEditor } = useUIStore();
+  const { editorOpen, editingDreamId, closeEditor, importQueue, importQueueIndex, advanceImportQueue } = useUIStore();
   const { dreams, createDream, updateDream } = useDreamStore();
   const allTags = useTagStore((state) => state.tags);
   const { archetypes, dreamArchetypeMap, setDreamArchetypes } = useArchetypeStore();
+  const { analystMode, clients } = useAnalystStore();
+
+  // Current import queue item (if any)
+  const currentQueueItem = importQueue.length > 0 ? importQueue[importQueueIndex] : null;
 
   const [title, setTitle] = useState('');
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -189,6 +194,7 @@ export function DreamEditor() {
   const [clarityRating, setClarityRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [wakingLifeContext, setWakingLifeContext] = useState('');
   const [analysisNotes, setAnalysisNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -261,28 +267,39 @@ export function DreamEditor() {
       // Reset all fields when entering new-dream mode so that a previous
       // session's content never carries over into a fresh entry.
       draftRestoredRef.current = false;
-      setTitle('');
-      setDreamDate(format(new Date(), 'yyyy-MM-dd'));
+      setSelectedTags([]);
+      setSelectedArchetypeIds([]);
       setIsLucid(false);
       setMoodRating(null);
       setClarityRating(null);
-      setSelectedTags([]);
-      setSelectedArchetypeIds([]);
-      setWakingLifeContext('');
       setAnalysisNotes('');
-      editor.commands.setContent('');
-      // After clearing, offer to restore any previously saved draft
-      try {
-        const raw = localStorage.getItem(DRAFT_KEY);
-        if (raw) {
-          const draft: EditorDraft = JSON.parse(raw);
-          // Only restore if draft has meaningful content
-          if (draft.title || draft.contentHtml?.replace(/<[^>]+>/g, '').trim()) {
-            setShowDraftBanner(true);
+
+      // If a queue item is waiting, pre-fill from it
+      if (currentQueueItem) {
+        setTitle(currentQueueItem.title);
+        setDreamDate(currentQueueItem.date);
+        setSelectedClientId(currentQueueItem.clientId);
+        setWakingLifeContext(clientPrefix(currentQueueItem.clientName));
+        editor.commands.setContent(currentQueueItem.contentHtml);
+        draftRestoredRef.current = true;
+      } else {
+        setTitle('');
+        setDreamDate(format(new Date(), 'yyyy-MM-dd'));
+        setSelectedClientId('');
+        setWakingLifeContext('');
+        editor.commands.setContent('');
+        // After clearing, offer to restore any previously saved draft
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const draft: EditorDraft = JSON.parse(raw);
+            if (draft.title || draft.contentHtml?.replace(/<[^>]+>/g, '').trim()) {
+              setShowDraftBanner(true);
+            }
           }
+        } catch {
+          // ignore malformed draft
         }
-      } catch {
-        // ignore malformed draft
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -448,7 +465,16 @@ export function DreamEditor() {
           word_tag_associations: wordTagAssociations,
         });
       } else {
-        const newDream = await createDream({
+        // Derive waking_life_context: if a client is selected in professional mode,
+      // prefix with client tag; otherwise use the raw textarea value.
+      const clientName = analystMode && selectedClientId
+        ? clients.find((c) => c.id === selectedClientId)?.name ?? null
+        : null;
+      const effectiveContext = clientName
+        ? clientPrefix(clientName) + (wakingLifeContext.trim() ? ' ' + wakingLifeContext.trim() : '')
+        : wakingLifeContext.trim() || null;
+
+      const newDream = await createDream({
           title: title.trim(),
           content_html: contentHtml,
           content_plain: contentPlain,
@@ -456,7 +482,7 @@ export function DreamEditor() {
           is_lucid: isLucid,
           mood_rating: moodRating,
           clarity_rating: clarityRating,
-          waking_life_context: wakingLifeContext.trim() || null,
+          waking_life_context: effectiveContext,
           analysis_notes: analysisNotes.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
@@ -464,6 +490,11 @@ export function DreamEditor() {
         setDreamArchetypes(newDream.id, selectedArchetypeIds);
         // Clear draft on successful save
         localStorage.removeItem(DRAFT_KEY);
+        // Advance import queue if active (do this instead of closeEditor)
+        if (importQueue.length > 0) {
+          advanceImportQueue();
+          return;
+        }
       }
       closeEditor();
     } catch (error) {
@@ -677,6 +708,34 @@ export function DreamEditor() {
             </div>
             <TagPicker selectedTags={selectedTags} onTagsChange={handleTagsChange} />
           </div>
+
+          {/* Client selector (professional mode, new dreams only) */}
+          {analystMode && clients.length > 0 && !editingDreamId && (
+            <div className="space-y-2">
+              <Label htmlFor="dream-client">Client</Label>
+              <select
+                id="dream-client"
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">Personal / no client</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Queue progress indicator */}
+          {importQueue.length > 0 && (
+            <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs">
+              <span className="text-primary font-medium">
+                Import queue: {importQueueIndex + 1} of {importQueue.length}
+              </span>
+              <span className="text-muted-foreground ml-auto">Save to advance to next file</span>
+            </div>
+          )}
 
           {/* Archetypes */}
           <div className="space-y-2">

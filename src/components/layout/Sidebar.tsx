@@ -12,7 +12,7 @@ const navItems = [
   { id: 'theme' as const, icon: Microscope, label: 'Theme Analysis' },
   { id: 'archetypes' as const, icon: Layers, label: 'Archetypes' },
   { id: 'series' as const, icon: GitBranch, label: 'Dream Series' },
-  { id: 'analyst' as const, icon: Briefcase, label: 'Analyst' },
+  { id: 'analyst' as const, icon: Briefcase, label: 'Professional' },
   { id: 'settings' as const, icon: Settings, label: 'Settings' },
   { id: 'guide' as const, icon: HelpCircle, label: 'Guide' },
 ];
