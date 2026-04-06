@@ -19,6 +19,7 @@ import {
   Wand2,
   ImagePlus,
   X,
+  Brain,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ import { useTagStore } from '@/stores/tagStore';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useAnalystStore, clientPrefix } from '@/stores/analystStore';
 import type { Tag, WordTagAssociation } from '@/lib/tauri';
+import { analyzeDream } from '@/lib/tauri';
 import type { Editor } from '@tiptap/core';
 
 const DRAFT_KEY = 'dreams_new_dream_draft';
@@ -198,6 +200,8 @@ export function DreamEditor() {
   const [wakingLifeContext, setWakingLifeContext] = useState('');
   const [analysisNotes, setAnalysisNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isAnalysing, setIsAnalysing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const draftRestoredRef = useRef(false);
 
@@ -563,6 +567,49 @@ export function DreamEditor() {
     editor.commands.setContent(fixed, false);
   };
 
+  const handleAIAnalysis = async () => {
+    if (!editor) return;
+    const dreamText = editor.getText().trim();
+    if (!dreamText) return;
+
+    const apiKey = localStorage.getItem('anthropic_api_key') ?? '';
+    if (!apiKey.trim()) {
+      setAnalysisError('No API key found. Add your Anthropic API key in Settings.');
+      return;
+    }
+
+    setIsAnalysing(true);
+    setAnalysisError(null);
+    try {
+      const tagsJson = JSON.stringify(
+        allTags.map((t) => ({ id: t.id, name: t.name, category: t.category }))
+      );
+      const result = await analyzeDream(dreamText, tagsJson, apiKey);
+
+      // Match suggested tag names (case-insensitive) to existing tags
+      const lowerIndex = new Map(allTags.map((t) => [t.name.toLowerCase(), t]));
+      const newMatches = result.suggested_tag_names
+        .map((n) => lowerIndex.get(n.toLowerCase()))
+        .filter((t): t is Tag => t !== undefined)
+        .filter((t) => !selectedTags.some((s) => s.id === t.id));
+
+      if (newMatches.length > 0) {
+        handleTagsChange([...selectedTags, ...newMatches]);
+      }
+
+      // Append theme suggestions to analysis notes
+      if (result.theme_suggestions) {
+        setAnalysisNotes((prev) =>
+          prev.trim() ? `${prev.trim()}\n\n${result.theme_suggestions}` : result.theme_suggestions
+        );
+      }
+    } catch (e) {
+      setAnalysisError(String(e));
+    } finally {
+      setIsAnalysing(false);
+    }
+  };
+
   /** Handle tag list changes, removing editor marks for any removed tags. */
   const handleTagsChange = (newTags: Tag[]) => {
     // Flush draft to localStorage before touching editor state so content is
@@ -857,7 +904,28 @@ export function DreamEditor() {
                   className="hidden"
                   onChange={handleImageFile}
                 />
+                <Separator orientation="vertical" className="h-6 mx-1" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={handleAIAnalysis}
+                  disabled={isAnalysing}
+                  title="Analyse dream with AI: suggests tags and theme notes"
+                >
+                  <Brain className="h-3.5 w-3.5" />
+                  {isAnalysing ? 'Analysing…' : 'AI Analyse'}
+                </Button>
               </div>
+              {analysisError && (
+                <div className="flex items-center justify-between border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <span>{analysisError}</span>
+                  <button type="button" onClick={() => setAnalysisError(null)} className="ml-2 hover:opacity-70">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
               <div className="p-4 relative">
                 {editor && selectedTags.length > 0 && (
                   <BubbleMenu

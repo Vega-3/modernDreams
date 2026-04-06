@@ -33,6 +33,7 @@ pub fn run() {
             commands::ocr::recognize_handwriting,
             commands::claude::transcribe_handwriting_claude,
             commands::claude::verify_api_key,
+            commands::claude::analyze_dream,
             commands::graph::get_graph_stats,
             commands::theme::get_tag_notes,
             commands::theme::save_tag_notes,

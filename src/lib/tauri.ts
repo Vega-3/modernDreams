@@ -143,6 +143,23 @@ export const transcribeHandwritingClaude = (
     apiKey,
   });
 
+// Claude AI dream analysis
+export interface DreamAnalysisResult {
+  suggested_tag_names: string[];
+  theme_suggestions: string;
+}
+
+export const analyzeDream = (
+  dreamText: string,
+  availableTags: string,
+  apiKey: string,
+) =>
+  invoke<DreamAnalysisResult>('analyze_dream', {
+    dreamText,
+    availableTags,
+    apiKey,
+  });
+
 // ── Graph theory analysis ─────────────────────────────────────────────────────
 
 export interface GraphNodeStat {

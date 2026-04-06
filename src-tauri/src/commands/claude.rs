@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Serialize)]
 pub struct TranscriptionResult {
@@ -183,4 +184,110 @@ pub async fn transcribe_handwriting_claude(
         raw_transcript,
         english_transcript,
     })
+}
+
+// ─── Dream analysis ────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize)]
+pub struct DreamAnalysisResult {
+    /// Tag names Claude recommends applying (subset of available_tags, plus new
+    /// suggestions that are hard to place in existing ones).
+    pub suggested_tag_names: Vec<String>,
+    /// Thematic observations Claude generated — ready to paste into analysis notes.
+    pub theme_suggestions: String,
+}
+
+/// Analyse a dream entry with Claude and return tag suggestions + theme notes.
+///
+/// The prompt is deliberately structured so Claude returns a compact JSON object,
+/// making tag parsing reliable without free-form string matching.
+///
+/// `available_tags` – JSON-serialised list of `{id, name, category}` so Claude
+/// can ground its suggestions in the real tag vocabulary.
+#[tauri::command]
+pub async fn analyze_dream(
+    dream_text: String,
+    available_tags: String,  // JSON array of {id, name, category}
+    api_key: String,
+) -> Result<DreamAnalysisResult, String> {
+    if api_key.trim().is_empty() {
+        return Err(
+            "No Anthropic API key configured. Please add your key in Settings.".to_string(),
+        );
+    }
+    if dream_text.trim().is_empty() {
+        return Err("Dream text is empty.".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let model = "claude-haiku-4-5-20251001";
+
+    // Validate available_tags is parseable JSON; fall back to empty array.
+    let tags_json: Value = serde_json::from_str(&available_tags)
+        .unwrap_or(Value::Array(vec![]));
+
+    let system = "You are an expert Jungian dream analyst and symbolic psychologist. \
+        Analyse dreams carefully, attending to symbolic imagery, emotional tone, \
+        recurring motifs, and archetypal patterns.";
+
+    let user_prompt = format!(
+        r#"Analyse the following dream journal entry.
+
+DREAM TEXT:
+{dream_text}
+
+AVAILABLE TAGS (use these names when assigning; you may suggest genuinely new names
+if no existing tag fits, but keep new suggestions minimal):
+{tags_json}
+
+Return ONLY a valid JSON object with exactly these two keys:
+{{
+  "suggested_tag_names": ["tag_name_1", "tag_name_2", ...],
+  "theme_suggestions": "A concise paragraph of thematic observations, symbolic interpretations, and questions worth reflecting on. Write in the analyst voice — direct and exploratory."
+}}
+
+Rules for suggested_tag_names:
+- Use existing tag names where possible (exact match, case-insensitive).
+- Suggest a new name only if no existing tag captures an important symbol or theme.
+- It should be difficult but not impossible to suggest a new tag — only do so for clear, recurring symbolic elements not covered by the list.
+- Return between 2 and 8 tag suggestions total."#,
+    );
+
+    let request = AnthropicRequest {
+        model,
+        max_tokens: 1024,
+        messages: vec![Message {
+            role: "user",
+            content: vec![
+                ContentBlock::Text { text: system },
+                ContentBlock::Text { text: &user_prompt },
+            ],
+        }],
+    };
+
+    let raw = call_claude(&client, api_key.trim(), &request).await?;
+
+    // Extract JSON from the response (Claude may wrap it in markdown fences)
+    let json_str = extract_json(&raw);
+    let parsed: DreamAnalysisResult = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse Claude response as JSON: {e}\nRaw: {raw}"))?;
+
+    Ok(parsed)
+}
+
+/// Strip optional markdown code fences and extract the JSON object.
+fn extract_json(s: &str) -> String {
+    let s = s.trim();
+    // Remove ```json ... ``` or ``` ... ``` wrappers
+    let s = if s.starts_with("```") {
+        let start = s.find('\n').map(|i| i + 1).unwrap_or(3);
+        let end = s.rfind("```").unwrap_or(s.len());
+        &s[start..end]
+    } else {
+        s
+    };
+    // Find first '{' and last '}'
+    let start = s.find('{').unwrap_or(0);
+    let end = s.rfind('}').map(|i| i + 1).unwrap_or(s.len());
+    s[start..end].to_string()
 }
