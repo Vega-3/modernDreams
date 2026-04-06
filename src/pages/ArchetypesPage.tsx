@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link2, Link2Off, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,16 +13,14 @@ import type { Tag } from '@/lib/tauri';
 
 function ArchetypeCard({ archetype }: { archetype: Archetype }) {
   const { tags } = useTagStore();
-  const { dreamArchetypeMap } = useArchetypeStore();
-  const { linkTagToArchetype, unlinkTagFromArchetype } = useArchetypeStore();
+  const { dreamArchetypeMap, linkTagToArchetype, unlinkTagFromArchetype } = useArchetypeStore();
   const [expanded, setExpanded] = useState(false);
   const [showLinkPanel, setShowLinkPanel] = useState(false);
 
-  const linkedTags = tags.filter((t) => archetype.linkedTagIds.includes(t.id));
-  const unlinkable = linkedTags;
-  const linkable = tags.filter((t) => !archetype.linkedTagIds.includes(t.id));
+  const linkedIds = new Set(archetype.linkedTagIds);
+  const linkedTags = tags.filter((t) => linkedIds.has(t.id));
+  const linkable = tags.filter((t) => !linkedIds.has(t.id));
 
-  // Count dreams that have this archetype applied
   const dreamCount = Object.values(dreamArchetypeMap).filter((ids) =>
     ids.includes(archetype.id)
   ).length;
@@ -137,10 +135,17 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
 // ── Activity summary ──────────────────────────────────────────────────────────
 
 function ActivitySummary() {
-  const { getArchetypesByDreamActivity } = useArchetypeStore();
-  const activity = getArchetypesByDreamActivity()
-    .filter((a) => a.dreamCount > 0)
-    .sort((a, b) => b.dreamCount - a.dreamCount);
+  const { archetypes, dreamArchetypeMap } = useArchetypeStore();
+  const activity = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ids of Object.values(dreamArchetypeMap)) {
+      for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return archetypes
+      .map((a) => ({ archetype: a, dreamCount: counts.get(a.id) ?? 0 }))
+      .filter((a) => a.dreamCount > 0)
+      .sort((a, b) => b.dreamCount - a.dreamCount);
+  }, [archetypes, dreamArchetypeMap]);
 
   if (activity.length === 0) return null;
 

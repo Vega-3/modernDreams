@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { Plus, Trash2, Lightbulb, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -12,13 +12,19 @@ import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
 import type { Dream } from '@/lib/tauri';
 
-// ── Horizontal timeline ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function SeriesTimeline({ series, dreams }: { series: DreamSeries; dreams: Dream[] }) {
-  const seriesDreams = series.dreamIds
-    .map((id) => dreams.find((d) => d.id === id))
+function resolveSeriesDreams(dreamIds: string[], dreamMap: Map<string, Dream>): Dream[] {
+  return dreamIds
+    .map((id) => dreamMap.get(id))
     .filter((d): d is Dream => d !== undefined)
     .sort((a, b) => a.dream_date.localeCompare(b.dream_date));
+}
+
+// ── Horizontal timeline ───────────────────────────────────────────────────────
+
+function SeriesTimeline({ series, dreamMap }: { series: DreamSeries; dreamMap: Map<string, Dream> }) {
+  const seriesDreams = resolveSeriesDreams(series.dreamIds, dreamMap);
 
   if (seriesDreams.length === 0) {
     return (
@@ -76,11 +82,8 @@ function SeriesTimeline({ series, dreams }: { series: DreamSeries; dreams: Dream
 
 // ── Tag evolution summary ─────────────────────────────────────────────────────
 
-function TagEvolution({ series, dreams }: { series: DreamSeries; dreams: Dream[] }) {
-  const seriesDreams = series.dreamIds
-    .map((id) => dreams.find((d) => d.id === id))
-    .filter((d): d is Dream => d !== undefined)
-    .sort((a, b) => a.dream_date.localeCompare(b.dream_date));
+function TagEvolution({ series, dreamMap }: { series: DreamSeries; dreamMap: Map<string, Dream> }) {
+  const seriesDreams = resolveSeriesDreams(series.dreamIds, dreamMap);
 
   if (seriesDreams.length === 0) return null;
 
@@ -144,7 +147,7 @@ function TagEvolution({ series, dreams }: { series: DreamSeries; dreams: Dream[]
 
 // ── Series card ───────────────────────────────────────────────────────────────
 
-function SeriesCard({ series, allDreams }: { series: DreamSeries; allDreams: Dream[] }) {
+function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allDreams: Dream[]; dreamMap: Map<string, Dream> }) {
   const { deleteSeries, addDreamToSeries, removeDreamFromSeries, setInterpretation, renameSeries } =
     useSeriesStore();
   const [expanded, setExpanded] = useState(true);
@@ -192,16 +195,16 @@ function SeriesCard({ series, allDreams }: { series: DreamSeries; allDreams: Dre
       {expanded && (
         <CardContent className="px-4 pb-4 space-y-3">
           {/* Timeline */}
-          <SeriesTimeline series={series} dreams={allDreams} />
+          <SeriesTimeline series={series} dreamMap={dreamMap} />
 
           {/* Tag evolution */}
-          <TagEvolution series={series} dreams={allDreams} />
+          <TagEvolution series={series} dreamMap={dreamMap} />
 
           {/* Added dream list */}
           {series.dreamIds.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {series.dreamIds.map((id) => {
-                const dream = allDreams.find((d) => d.id === id);
+                const dream = dreamMap.get(id);
                 if (!dream) return null;
                 return (
                   <span
@@ -271,10 +274,12 @@ function SeriesCard({ series, allDreams }: { series: DreamSeries; allDreams: Dre
 
 function SuggestionsBanner({
   dreams,
+  dreamMap,
   existingIds,
   onAccept,
 }: {
   dreams: Dream[];
+  dreamMap: Map<string, Dream>;
   existingIds: Set<string>;
   onAccept: (group: string[]) => void;
 }) {
@@ -296,7 +301,7 @@ function SuggestionsBanner({
           <div className="mt-2 space-y-1.5">
             {novel.slice(0, 3).map((group, i) => {
               const names = group
-                .map((id) => dreams.find((d) => d.id === id)?.title)
+                .map((id) => dreamMap.get(id)?.title)
                 .filter(Boolean)
                 .slice(0, 4);
               return (
@@ -332,6 +337,7 @@ export function SeriesPage() {
   const { dreams } = useDreamStore();
   const [newName, setNewName] = useState('');
 
+  const dreamMap = useMemo(() => new Map(dreams.map((d) => [d.id, d])), [dreams]);
   const existingDreamIds = new Set(series.flatMap((s) => s.dreamIds));
 
   const handleCreate = () => {
@@ -343,7 +349,7 @@ export function SeriesPage() {
   const handleAcceptSuggestion = useCallback(
     (group: string[]) => {
       const names = group
-        .map((id) => dreams.find((d) => d.id === id)?.title)
+        .map((id) => dreamMap.get(id)?.title)
         .filter(Boolean)
         .slice(0, 2);
       const s = createSeries(names.join(' / ') || 'New Series');
@@ -352,7 +358,7 @@ export function SeriesPage() {
         store.addDreamToSeries(s.id, id);
       });
     },
-    [dreams, createSeries]
+    [dreamMap, createSeries]
   );
 
   return (
@@ -395,6 +401,7 @@ export function SeriesPage() {
           {/* Auto-suggestion banner */}
           <SuggestionsBanner
             dreams={dreams}
+            dreamMap={dreamMap}
             existingIds={existingDreamIds}
             onAccept={handleAcceptSuggestion}
           />
@@ -405,7 +412,7 @@ export function SeriesPage() {
             </div>
           ) : (
             series.map((s) => (
-              <SeriesCard key={s.id} series={s} allDreams={dreams} />
+              <SeriesCard key={s.id} series={s} allDreams={dreams} dreamMap={dreamMap} />
             ))
           )}
         </div>
