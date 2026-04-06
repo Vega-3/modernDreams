@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Link2, Link2Off, ChevronDown, ChevronUp } from 'lucide-react';
+import { Link2Off, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useArchetypeStore, type Archetype } from '@/stores/archetypeStore';
@@ -15,11 +16,14 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
   const { tags } = useTagStore();
   const { dreamArchetypeMap, linkTagToArchetype, unlinkTagFromArchetype } = useArchetypeStore();
   const [expanded, setExpanded] = useState(false);
-  const [showLinkPanel, setShowLinkPanel] = useState(false);
+  const [linkSearch, setLinkSearch] = useState('');
 
   const linkedIds = new Set(archetype.linkedTagIds);
   const linkedTags = tags.filter((t) => linkedIds.has(t.id));
-  const linkable = tags.filter((t) => !linkedIds.has(t.id));
+  const linkableRaw = tags.filter((t) => !linkedIds.has(t.id));
+  const linkable = linkSearch.trim()
+    ? linkableRaw.filter((t) => t.name.toLowerCase().includes(linkSearch.toLowerCase()))
+    : linkableRaw;
 
   const dreamCount = Object.values(dreamArchetypeMap).filter((ids) =>
     ids.includes(archetype.id)
@@ -90,29 +94,28 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
           )}
         </div>
 
-        {/* Link tag panel */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 text-[11px] gap-1 text-muted-foreground hover:text-foreground px-1.5"
-          onClick={() => setShowLinkPanel((v) => !v)}
-        >
-          <Link2 className="h-3 w-3" />
-          {showLinkPanel ? 'Close' : 'Link tag…'}
-        </Button>
-
-        {showLinkPanel && (
-          <div className="rounded-md border bg-muted/20 p-2 max-h-36 overflow-y-auto space-y-1">
+        {/* Link tag panel — always visible */}
+        <div className="rounded-md border bg-muted/20 p-2 space-y-1.5">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              className="h-6 pl-6 text-[11px] bg-transparent border-muted/50"
+              placeholder="Search tags…"
+              value={linkSearch}
+              onChange={(e) => setLinkSearch(e.target.value)}
+            />
+          </div>
+          <div className="max-h-32 overflow-y-auto space-y-0.5">
             {linkable.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground italic">All tags are already linked.</p>
+              <p className="text-[11px] text-muted-foreground italic px-1">
+                {linkSearch ? 'No matching tags.' : 'All tags are already linked.'}
+              </p>
             ) : (
               linkable.map((tag) => (
                 <button
                   key={tag.id}
                   className="flex items-center gap-2 w-full text-left hover:bg-muted/40 rounded px-2 py-1 text-xs transition-colors"
-                  onClick={() => {
-                    linkTagToArchetype(archetype.id, tag.id);
-                  }}
+                  onClick={() => linkTagToArchetype(archetype.id, tag.id)}
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -126,7 +129,7 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
               ))
             )}
           </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );

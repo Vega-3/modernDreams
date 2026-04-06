@@ -118,7 +118,10 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
           if (!word) return;
           const tags: TagRef[] = mark.attrs.tags ?? [];
           tags.forEach(({ tagId }) => {
-            if (tagId) associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex });
+            // Skip archetype refs (stored as 'arch:<id>') — not word-tag associations
+            if (tagId && !tagId.startsWith('arch:')) {
+              associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex });
+            }
           });
         }
       });
@@ -930,60 +933,102 @@ export function DreamEditor() {
                 </div>
               )}
               <div className="p-4 relative">
-                {editor && selectedTags.length > 0 && (
+                {editor && (selectedTags.length > 0 || archetypes.length > 0) && (
                   <BubbleMenu
                     editor={editor}
                     tippyOptions={{ duration: 100, placement: 'top' }}
                     shouldShow={({ from, to }) => from !== to}
                   >
-                    <div className="flex gap-1 bg-popover border rounded-md shadow-lg p-1.5 flex-wrap max-w-xs">
-                      {[...selectedTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
-                        // Check if this tag is in the tags array of the active mark
-                        const activeMark = editor.state.selection.$from
-                          .marks()
-                          .find((m) => m.type.name === 'tagHighlight');
-                        const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
-                        const isActive = activeTags.some((t) => t.tagId === tag.id);
-                        return (
-                          <button
-                            key={tag.id}
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              const { from, to } = editor.state.selection;
-                              const existingMark = editor.state.doc
-                                .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
-                                ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
-                                : null;
-                              const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
-
-                              let newTags: TagRef[];
-                              if (isActive) {
-                                newTags = currentTags.filter((t) => t.tagId !== tag.id);
-                              } else {
-                                newTags = [...currentTags, { tagId: tag.id, tagColor: tag.color, tagName: tag.name }];
-                              }
-
-                              if (newTags.length === 0) {
-                                editor.chain().focus().unsetMark('tagHighlight').run();
-                              } else {
-                                editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
-                              }
-                            }}
-                            className={cn(
-                              'px-2 py-0.5 rounded text-xs font-medium transition-all border',
-                              isActive && 'ring-2 ring-offset-1 ring-current'
-                            )}
-                            style={{
-                              backgroundColor: tag.color + '26',
-                              color: tag.color,
-                              borderColor: tag.color,
-                            }}
-                          >
-                            {tag.name}
-                          </button>
-                        );
-                      })}
+                    <div className="flex flex-col gap-1 bg-popover border rounded-md shadow-lg p-1.5 max-w-sm">
+                      {/* Tags row */}
+                      {selectedTags.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          {[...selectedTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
+                            const activeMark = editor.state.selection.$from
+                              .marks()
+                              .find((m) => m.type.name === 'tagHighlight');
+                            const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
+                            const isActive = activeTags.some((t) => t.tagId === tag.id);
+                            return (
+                              <button
+                                key={tag.id}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  const { from, to } = editor.state.selection;
+                                  const existingMark = editor.state.doc
+                                    .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
+                                    ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
+                                    : null;
+                                  const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
+                                  const newTags = isActive
+                                    ? currentTags.filter((t) => t.tagId !== tag.id)
+                                    : [...currentTags, { tagId: tag.id, tagColor: tag.color, tagName: tag.name }];
+                                  if (newTags.length === 0) {
+                                    editor.chain().focus().unsetMark('tagHighlight').run();
+                                  } else {
+                                    editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
+                                  }
+                                }}
+                                className={cn(
+                                  'px-2 py-0.5 rounded text-xs font-medium transition-all border',
+                                  isActive && 'ring-2 ring-offset-1 ring-current'
+                                )}
+                                style={{ backgroundColor: tag.color + '26', color: tag.color, borderColor: tag.color }}
+                              >
+                                {tag.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {/* Archetypes row */}
+                      {selectedTags.length > 0 && archetypes.length > 0 && (
+                        <div className="border-t border-border/40 pt-1" />
+                      )}
+                      {archetypes.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          {archetypes.map((arch) => {
+                            const activeMark = editor.state.selection.$from
+                              .marks()
+                              .find((m) => m.type.name === 'tagHighlight');
+                            const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
+                            const archTagId = `arch:${arch.id}`;
+                            const isActive = activeTags.some((t) => t.tagId === archTagId);
+                            return (
+                              <button
+                                key={arch.id}
+                                type="button"
+                                title={arch.description}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  const { from, to } = editor.state.selection;
+                                  const existingMark = editor.state.doc
+                                    .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
+                                    ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
+                                    : null;
+                                  const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
+                                  const newTags = isActive
+                                    ? currentTags.filter((t) => t.tagId !== archTagId)
+                                    : [...currentTags, { tagId: archTagId, tagColor: arch.color, tagName: arch.name }];
+                                  if (newTags.length === 0) {
+                                    editor.chain().focus().unsetMark('tagHighlight').run();
+                                  } else {
+                                    editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
+                                  }
+                                }}
+                                className={cn(
+                                  'px-2 py-0.5 rounded text-[10px] font-medium transition-all border italic',
+                                  isActive && 'ring-2 ring-offset-1 ring-current'
+                                )}
+                                style={{ backgroundColor: arch.color + '22', color: arch.color, borderColor: arch.color + '88' }}
+                              >
+                                {arch.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </BubbleMenu>
                 )}
