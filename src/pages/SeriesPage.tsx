@@ -89,15 +89,14 @@ function TagEvolution({ series, dreamMap }: { series: DreamSeries; dreamMap: Map
   if (seriesDreams.length === 0) return null;
 
   // Count ALL tag appearances (all categories are symbolic carriers)
-  const tagCounts = new Map<string, { name: string; color: string; count: number; presentIn: Set<number> }>();
-  seriesDreams.forEach((dream, i) => {
+  const tagCounts = new Map<string, { name: string; color: string; count: number }>();
+  seriesDreams.forEach((dream) => {
     dream.tags.forEach((tag) => {
       const existing = tagCounts.get(tag.id);
       if (existing) {
         existing.count++;
-        existing.presentIn.add(i);
       } else {
-        tagCounts.set(tag.id, { name: tag.name, color: tag.color, count: 1, presentIn: new Set([i]) });
+        tagCounts.set(tag.id, { name: tag.name, color: tag.color, count: 1 });
       }
     });
   });

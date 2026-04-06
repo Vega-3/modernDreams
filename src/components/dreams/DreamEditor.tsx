@@ -51,6 +51,10 @@ import type { Editor } from '@tiptap/core';
 
 const DRAFT_KEY = 'dreams_new_dream_draft';
 
+// Prefix used to store archetype refs in the tagHighlight mark alongside regular tags.
+// Must be filtered out when extracting word-tag associations (see extractWordTagAssociations).
+const ARCHETYPE_TAG_PREFIX = 'arch:';
+
 interface EditorDraft {
   title: string;
   dreamDate: string;
@@ -108,7 +112,8 @@ function applyGrammarFixes(html: string): string {
       [/\bbelive\b/gi, 'believe'],
       [/\boccured\b/gi, 'occurred'],
       [/\bseperate\b/gi, 'separate'],
-      [/\bdefinate(ly)?\b/gi, (_, s) => s ? 'definitely' : 'definite'],
+      [/\bdefinately\b/gi, 'definitely'],
+      [/\bdefinate\b/gi, 'definite'],
       [/\bwierd\b/gi, 'weird'],
       [/\bthere fore\b/gi, 'therefore'],
       [/\bur\b/g, 'your'],        // casual shorthand (text node only)
@@ -177,8 +182,7 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
           if (!word) return;
           const tags: TagRef[] = mark.attrs.tags ?? [];
           tags.forEach(({ tagId }) => {
-            // Skip archetype refs (stored as 'arch:<id>') — not word-tag associations
-            if (tagId && !tagId.startsWith('arch:')) {
+            if (tagId && !tagId.startsWith(ARCHETYPE_TAG_PREFIX)) {
               associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex });
             }
           });
@@ -585,45 +589,50 @@ export function DreamEditor() {
     e.target.value = '';
   };
 
+  /**
+   * Single-pass doc traversal: for each text node, check ALL tags' search terms
+   * in one pass and add 'auto' highlight marks for every match found.
+   * O(doc_size × avg_terms_per_tag) instead of O(tags × doc_size).
+   */
+  const applyAutoHighlights = (tagsToHighlight: Tag[]) => {
+    if (!editor || tagsToHighlight.length === 0) return;
+    const markType = editor.schema.marks.tagHighlight;
+    const { tr } = editor.state;
+    // Build search-term → tag map for efficient per-node lookup
+    const termMap = new Map<string, Tag>();
+    tagsToHighlight.forEach((tag) => {
+      [tag.name, ...tag.aliases].forEach((s) => termMap.set(s.toLowerCase(), tag));
+    });
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isText || !node.text) return;
+      const lower = node.text.toLowerCase();
+      termMap.forEach((tag, term) => {
+        let idx = lower.indexOf(term);
+        while (idx !== -1) {
+          tr.addMark(
+            pos + idx,
+            pos + idx + term.length,
+            markType.create({ tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }], source: 'auto' }),
+          );
+          idx = lower.indexOf(term, idx + 1);
+        }
+      });
+    });
+    editor.view.dispatch(tr);
+  };
+
   const handleAutoMatchTags = () => {
     if (!editor) return;
     const text = editor.getText().toLowerCase();
     const matched = allTags.filter(
       (tag) =>
         !selectedTags.some((t) => t.id === tag.id) &&
-        (
-          text.includes(tag.name.toLowerCase()) ||
-          tag.aliases.some((alias) => text.includes(alias.toLowerCase()))
-        )
+        (text.includes(tag.name.toLowerCase()) ||
+          tag.aliases.some((alias) => text.includes(alias.toLowerCase())))
     );
     if (matched.length === 0) return;
-
     setSelectedTags([...selectedTags, ...matched]);
-
-    // Apply auto-highlight marks to each occurrence of the matched words
-    const doc = editor.state.doc;
-    const { tr } = editor.state;
-    const markType = editor.schema.marks.tagHighlight;
-
-    matched.forEach((tag) => {
-      const searchTerms = [tag.name, ...tag.aliases].map((s) => s.toLowerCase());
-      doc.descendants((node, pos) => {
-        if (!node.isText || !node.text) return;
-        const lower = node.text.toLowerCase();
-        searchTerms.forEach((term) => {
-          let idx = lower.indexOf(term);
-          while (idx !== -1) {
-            const from = pos + idx;
-            const to = from + term.length;
-            const autoMark = markType.create({ tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }], source: 'auto' });
-            tr.addMark(from, to, autoMark);
-            idx = lower.indexOf(term, idx + 1);
-          }
-        });
-      });
-    });
-
-    editor.view.dispatch(tr);
+    applyAutoHighlights(matched);
   };
 
   const handleGrammarFix = () => {
@@ -674,33 +683,8 @@ export function DreamEditor() {
         handleTagsChange(updatedTags);
       }
 
-      // 3. Apply in-text highlights for all newly added tags
-      if (allNewTags.length > 0 && editor) {
-        const doc = editor.state.doc;
-        const { tr } = editor.state;
-        const markType = editor.schema.marks.tagHighlight;
-        allNewTags.forEach((tag) => {
-          const searchTerms = [tag.name, ...tag.aliases].map((s) => s.toLowerCase());
-          doc.descendants((node, pos) => {
-            if (!node.isText || !node.text) return;
-            const lower = node.text.toLowerCase();
-            searchTerms.forEach((term) => {
-              let idx = lower.indexOf(term);
-              while (idx !== -1) {
-                const from = pos + idx;
-                const to = from + term.length;
-                const autoMark = markType.create({
-                  tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }],
-                  source: 'auto',
-                });
-                tr.addMark(from, to, autoMark);
-                idx = lower.indexOf(term, idx + 1);
-              }
-            });
-          });
-        });
-        editor.view.dispatch(tr);
-      }
+      // 3. Apply in-text highlights for all newly added tags (single-pass)
+      applyAutoHighlights(allNewTags);
 
       // 4. Append theme suggestions to analysis notes
       if (result.theme_suggestions) {
@@ -726,6 +710,24 @@ export function DreamEditor() {
       removedTags.forEach((tag) => removeTagMarksFromEditor(editor, tag.id));
     }
     setSelectedTags(newTags);
+  };
+
+  /** Toggle a tagHighlight mark ref (tag or archetype) on the current selection. */
+  const toggleMarkRef = (id: string, color: string, name: string) => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const existingMark = editor.state.doc
+      .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
+      ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
+      : null;
+    const current: TagRef[] = existingMark?.attrs.tags ?? [];
+    const isActive = current.some((t) => t.tagId === id);
+    const next = isActive ? current.filter((t) => t.tagId !== id) : [...current, { tagId: id, tagColor: color, tagName: name }];
+    if (next.length === 0) {
+      editor.chain().focus().unsetMark('tagHighlight').run();
+    } else {
+      editor.chain().focus().setMark('tagHighlight', { tags: next }).run();
+    }
   };
 
   const ToolbarButton = ({
@@ -1043,36 +1045,14 @@ export function DreamEditor() {
                       {selectedTags.length > 0 && (
                         <div className="flex gap-1 flex-wrap">
                           {[...selectedTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
-                            const activeMark = editor.state.selection.$from
-                              .marks()
-                              .find((m) => m.type.name === 'tagHighlight');
-                            const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
+                            const activeTags: TagRef[] = editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [];
                             const isActive = activeTags.some((t) => t.tagId === tag.id);
                             return (
                               <button
                                 key={tag.id}
                                 type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  const { from, to } = editor.state.selection;
-                                  const existingMark = editor.state.doc
-                                    .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
-                                    ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
-                                    : null;
-                                  const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
-                                  const newTags = isActive
-                                    ? currentTags.filter((t) => t.tagId !== tag.id)
-                                    : [...currentTags, { tagId: tag.id, tagColor: tag.color, tagName: tag.name }];
-                                  if (newTags.length === 0) {
-                                    editor.chain().focus().unsetMark('tagHighlight').run();
-                                  } else {
-                                    editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
-                                  }
-                                }}
-                                className={cn(
-                                  'px-2 py-0.5 rounded text-xs font-medium transition-all border',
-                                  isActive && 'ring-2 ring-offset-1 ring-current'
-                                )}
+                                onMouseDown={(e) => { e.preventDefault(); toggleMarkRef(tag.id, tag.color, tag.name); }}
+                                className={cn('px-2 py-0.5 rounded text-xs font-medium transition-all border', isActive && 'ring-2 ring-offset-1 ring-current')}
                                 style={{ backgroundColor: tag.color + '26', color: tag.color, borderColor: tag.color }}
                               >
                                 {tag.name}
@@ -1088,38 +1068,16 @@ export function DreamEditor() {
                       {archetypes.length > 0 && (
                         <div className="flex gap-1 flex-wrap">
                           {archetypes.map((arch) => {
-                            const activeMark = editor.state.selection.$from
-                              .marks()
-                              .find((m) => m.type.name === 'tagHighlight');
-                            const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
-                            const archTagId = `arch:${arch.id}`;
+                            const archTagId = `${ARCHETYPE_TAG_PREFIX}${arch.id}`;
+                            const activeTags: TagRef[] = editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [];
                             const isActive = activeTags.some((t) => t.tagId === archTagId);
                             return (
                               <button
                                 key={arch.id}
                                 type="button"
                                 title={arch.description}
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  const { from, to } = editor.state.selection;
-                                  const existingMark = editor.state.doc
-                                    .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
-                                    ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
-                                    : null;
-                                  const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
-                                  const newTags = isActive
-                                    ? currentTags.filter((t) => t.tagId !== archTagId)
-                                    : [...currentTags, { tagId: archTagId, tagColor: arch.color, tagName: arch.name }];
-                                  if (newTags.length === 0) {
-                                    editor.chain().focus().unsetMark('tagHighlight').run();
-                                  } else {
-                                    editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
-                                  }
-                                }}
-                                className={cn(
-                                  'px-2 py-0.5 rounded text-[10px] font-medium transition-all border italic',
-                                  isActive && 'ring-2 ring-offset-1 ring-current'
-                                )}
+                                onMouseDown={(e) => { e.preventDefault(); toggleMarkRef(archTagId, arch.color, arch.name); }}
+                                className={cn('px-2 py-0.5 rounded text-[10px] font-medium transition-all border italic', isActive && 'ring-2 ring-offset-1 ring-current')}
                                 style={{ backgroundColor: arch.color + '22', color: arch.color, borderColor: arch.color + '88' }}
                               >
                                 {arch.name}

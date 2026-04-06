@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { BookOpen } from 'lucide-react';
 import { DreamCard } from './DreamCard';
 import { Button } from '@/components/ui/button';
@@ -22,11 +22,11 @@ export function DreamList() {
   // Personal mode: show only dreams that have no client prefix.
   // Professional mode (no specific client): show all client dreams.
   // Professional mode (specific client selected): show only that client's dreams.
-  const visibleDreams = activeClient
-    ? dreams.filter((d) => extractClientName(d.waking_life_context) === activeClient.name)
-    : analystMode
-      ? dreams.filter((d) => extractClientName(d.waking_life_context) !== null)
-      : dreams.filter((d) => extractClientName(d.waking_life_context) === null);
+  const visibleDreams = useMemo(() => {
+    if (activeClient) return dreams.filter((d) => extractClientName(d.waking_life_context) === activeClient.name);
+    if (analystMode)  return dreams.filter((d) => extractClientName(d.waking_life_context) !== null);
+    return dreams.filter((d) => extractClientName(d.waking_life_context) === null);
+  }, [dreams, activeClient, analystMode]);
 
   useEffect(() => {
     fetchDreams();
