@@ -34,6 +34,12 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Jungian Archetypes Reference**: A comprehensive reference document (`public/ARCHETYPES.md`) covering all 12 Jungian archetypes with dream indicators, shadow forms, and professional resources — viewable from the Guide page
 - **Analyst Mode**: Multi-client dream management for professional analysts — manage client profiles, bulk-import dreams from text files, and filter the journal by client
 - **Visual Customization**: Switch themes, change fonts, inject custom CSS, set a custom background image, and batch-update tag colours via palette upload — all from Settings → Appearance
+- **Constellation View**: The Tag Analysis page now displays co-occurring tags as a concentric constellation (Cytoscape.js) — the most closely associated tags orbit toward the centre, replacing the flat force-directed graph (#22)
+- **Jungian Archetypes Tracker**: A new Archetypes page seeds 12 archetypes from `public/ARCHETYPES.md`, lets you link tags to each archetype, and shows dream-level activity per archetype; archetypes can also be assigned per dream in the editor (#23)
+- **Guide binder redesign**: The Guide page renders as a multi-tab binder — the Archetypes reference and the journalling guide are selectable pages with prev/next navigation (#24)
+- **Dream Series**: A new Dream Series page groups related dreams into named series with a horizontal timeline, symbolic tag evolution grid, and Jaccard-based auto-suggestions for series membership (#25)
+- **Professional mode**: Analyst Mode renamed to Professional Mode across the entire UI; the bulk import flow now opens each file sequentially in the dream editor with a progress indicator, replacing the old one-shot batch import (#26)
+- **AI Dream Analysis**: An "AI Analyse" toolbar button in the dream editor calls Claude Haiku to suggest relevant tags from your tag library and generate Jungian theme notes, auto-applying matched tags and appending the analysis to the Analysis Notes field (#27)
 
 ## Prerequisites
 
@@ -177,13 +183,13 @@ src-tauri/resources/
 └── graph_analysis.py   # Compiled into the binary via include_str!
 ```
 
-## Analyst Mode
+## Professional Mode
 
-The **Analyst** page (sidebar → Analyst) provides tools for professionals managing multiple clients' dream journals.
+The **Professional** page (sidebar → Professional) provides tools for professionals managing multiple clients' dream journals.
 
 ### Features
 
-- **Mode toggle**: Switch between Personal and Analyst mode at any time.
+- **Mode toggle**: Switch between Personal and Professional mode at any time.
 - **Client management**: Add and remove named clients, each with a colour identifier.
 - **Bulk import**: Select one or more `.txt` files per client to import as dream entries. Each file becomes one dream; if the first line is a `YYYY-MM-DD` date it is used as the dream date, otherwise today's date is applied.
 - **Client filter**: When clients exist, a filter button appears in the header (left of the search button). Select a client to show only their dreams in the Journal; click the × badge to return to the full view.
