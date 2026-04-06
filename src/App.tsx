@@ -12,6 +12,7 @@ import { GuidePage } from '@/pages/GuidePage';
 import { ThemeAnalysisPage } from '@/pages/ThemeAnalysisPage';
 import { AnalystPage } from '@/pages/AnalystPage';
 import { ArchetypesPage } from '@/pages/ArchetypesPage';
+import { SeriesPage } from '@/pages/SeriesPage';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -41,6 +42,8 @@ function App() {
         return <ThemeAnalysisPage />;
       case 'archetypes':
         return <ArchetypesPage />;
+      case 'series':
+        return <SeriesPage />;
       case 'analyst':
         return <AnalystPage />;
       case 'settings':

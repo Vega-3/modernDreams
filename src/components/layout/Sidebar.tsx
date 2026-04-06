@@ -1,4 +1,4 @@
-import { Moon, BookOpen, Calendar, Network, Tags, Microscope, Layers, Briefcase, Settings, PanelLeftClose, PanelLeft, HelpCircle } from 'lucide-react';
+import { Moon, BookOpen, Calendar, Network, Tags, Microscope, Layers, GitBranch, Briefcase, Settings, PanelLeftClose, PanelLeft, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ const navItems = [
   { id: 'tags' as const, icon: Tags, label: 'Tags' },
   { id: 'theme' as const, icon: Microscope, label: 'Theme Analysis' },
   { id: 'archetypes' as const, icon: Layers, label: 'Archetypes' },
+  { id: 'series' as const, icon: GitBranch, label: 'Dream Series' },
   { id: 'analyst' as const, icon: Briefcase, label: 'Analyst' },
   { id: 'settings' as const, icon: Settings, label: 'Settings' },
   { id: 'guide' as const, icon: HelpCircle, label: 'Guide' },
