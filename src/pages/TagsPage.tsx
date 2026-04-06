@@ -23,10 +23,10 @@ import type { Tag, TagCategory, TagWordUsage, Dream } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
   { id: 'location', label: 'Locations' },
-  { id: 'person', label: 'People' },
   { id: 'symbolic', label: 'Symbolic' },
   { id: 'emotive', label: 'Emotive' },
   { id: 'custom', label: 'Custom' },
+  { id: 'person', label: 'Characters' },
 ];
 
 const presetColors = [
