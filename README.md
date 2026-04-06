@@ -40,6 +40,16 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Dream Series**: A new Dream Series page groups related dreams into named series with a horizontal timeline, symbolic tag evolution grid, and Jaccard-based auto-suggestions for series membership (#25)
 - **Professional mode**: Analyst Mode renamed to Professional Mode across the entire UI; the bulk import flow now opens each file sequentially in the dream editor with a progress indicator, replacing the old one-shot batch import (#26)
 - **AI Dream Analysis**: An "AI Analyse" toolbar button in the dream editor calls Claude Haiku to suggest relevant tags from your tag library and generate Jungian theme notes, auto-applying matched tags and appending the analysis to the Analysis Notes field (#27)
+- **Inline X tag removal fix**: Pressing the coloured X overlay on any in-text tagged span now correctly removes the tag from that specific chunk of text (#20)
+- **Archetype improvements**: Link-tag panel in Archetypes page is always visible with a live search input; archetypes now appear in the dream editor bubble menu so any selected text can be linked to an archetype exactly like tags (#23)
+- **Sleep & REM guide page**: A new "Sleep & REM" tab in the Guide binder covers sleep architecture, REM cycle timing, dream recall techniques, and MILD — the most evidence-based method for lucid dreaming (#24)
+- **Dream Series enhancements**: Tag overlap grid now includes all tag categories (not just symbolic); dream search in the add-dream panel filters by title or tag name; occurrence display redesigned as compact coloured count badges (#25)
+- **Professional mode separation**: Personal and professional dream views are now strictly separated — switching the toggle hides the other mode's entries without deleting them; client colour palette expanded from 8 to 16 options; All Clients button widened and styled more prominently (#26)
+- **AI analysis full pipeline**: AI Analyse now also runs auto-match and applies in-text highlights for all newly suggested tags; new-tag suggestion threshold in the prompt is lowered to encourage richer tagging (#27)
+- **Clarity theme**: High-contrast greyscale theme designed for accessibility — 1.125rem base font, wide line-height, thick borders, serif font default (#28)
+- **Neon Noir theme**: Modern high-contrast dark theme with cyan primary and magenta secondary accents, sharp 0.25rem corners, monospace font (#28)
+- **Context-aware spell checker**: Grammar fix now suppresses capitalisation after abbreviations (Dr., Mr., etc.), correctly handles "wont to" vs "won't", and adds common typo corrections (recieve→receive, wierd→weird, teh→the, etc.) (#29)
+- **Characters tag tab**: The "People" tag category is renamed "Characters" and moved to the last position in the tag category tabs (#30)
 
 ## Prerequisites
 
@@ -229,14 +239,14 @@ The **Settings → Appearance** section provides a full suite of visual controls
 
 ### Themes
 
-Two built-in themes, each carrying its own default font, icon stroke-width, font-size scale, and background:
+Four built-in themes, each carrying its own default font, icon stroke-width, font-size scale, and background:
 
 | Theme | Description | Default Font | Icons |
 |---|---|---|---|
 | **Mementos** (default) | Persona 5 maximalist — deep blacks, vivid red, angular cards, sharp uppercase typography | System UI | 2.5px stroke |
 | **Base Theme** | Clean minimal dark — indigo accent colour, rounded corners, soft radial gradient background | Humanist | 1.75px stroke |
-
-The Base Theme restores the full pre-Persona-5 visual layout: standard heading sizes (1.75 / 1.375 / 1.125 rem), normal letter-spacing, pill-style nav items, and the original indigo colour palette.
+| **Clarity** | High-contrast greyscale — near-white background, large text (1.125 rem), wide line-height; designed for accessibility | Serif | 2px stroke |
+| **Neon Noir** | High-contrast dark — near-black background, cyan/magenta accents, sharp corners | Monospace | 1.5px stroke |
 
 Switching themes overrides CSS custom properties and design-system rules via a runtime `<style>` tag. Selecting Mementos removes the override, restoring `globals.css` as the source of truth.
 
