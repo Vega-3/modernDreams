@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ThemeId = 'mementos' | 'base';
+export type ThemeId = 'mementos' | 'base' | 'clarity' | 'neon';
 
 export type FontFamily = 'system' | 'serif' | 'mono' | 'humanist';
 
@@ -54,6 +54,24 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
       radial-gradient(ellipse at 80% 20%, hsl(270 60% 50% / 0.03) 0%, transparent 50%)
     `.trim(),
     iconStrokeWidth: 1.75,
+    baseFontSize: '1rem',
+  },
+  clarity: {
+    id: 'clarity',
+    label: 'Clarity',
+    description: 'High-contrast greyscale — large text, maximum readability, no visual clutter. Designed for comfort and accessibility.',
+    defaultFont: 'serif',
+    backgroundImageCss: '',
+    iconStrokeWidth: 2,
+    baseFontSize: '1.125rem',
+  },
+  neon: {
+    id: 'neon',
+    label: 'Neon Noir',
+    description: 'Modern high-contrast dark theme — near-black background with vivid cyan and magenta accents, sharp edges.',
+    defaultFont: 'mono',
+    backgroundImageCss: '',
+    iconStrokeWidth: 1.5,
     baseFontSize: '1rem',
   },
 };
