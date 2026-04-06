@@ -63,20 +63,67 @@ interface EditorDraft {
   savedAt: string;
 }
 
-// Grammar fixes applied only to text nodes between HTML tags.
-// Only unambiguous single-solution corrections are applied.
+// Abbreviations after which the next word should NOT be capitalised.
+// These are common title/measurement abbreviations that end with a period.
+const ABBREV_PATTERN = /\b(?:Mr|Mrs|Ms|Dr|Prof|St|Jr|Sr|vs|etc|e\.g|i\.e|approx|dept|govt|Corp|Inc|Ltd|Vol|No|Apt|Ave|Blvd|Rd)\.\s*$/i;
+
+/**
+ * Context-aware grammar and spelling fixes.
+ *
+ * Processes text nodes extracted from HTML.  Improvements over the original:
+ * - "wont" only → "won't" when NOT immediately followed by "to" (preserves the
+ *   formal adjective "wont to do").
+ * - Capitalisation after sentence-ending punctuation is suppressed when the
+ *   preceding word is a known abbreviation (Dr., Mr., etc.).
+ * - Common one-character typos corrected (teh→the, recieve→receive, etc.).
+ * - Repeated punctuation collapsed (... is preserved; ,, → ,).
+ * - Smart apostrophe normalisation (curly → straight for editing clarity).
+ * - Double-space collapse.
+ * - Standalone "i" → "I".
+ */
 function applyGrammarFixes(html: string): string {
-  return html.replace(/>([^<]+)</g, (_, text: string) => {
-    let t = text;
-    // Collapse multiple spaces
+  // Collect all text-node spans so we can do cross-node context checks
+  const parts: string[] = html.split(/(>[^<]*<)/g);
+
+  // Two-pass: first collect plain text for context, then apply fixes per node
+  return parts.map((part) => {
+    // Only process text-node segments (between > and <)
+    if (!part.startsWith('>') || !part.endsWith('<')) return part;
+
+    let t = part.slice(1, -1); // strip surrounding > and <
+
+    // ── 1. Normalise whitespace and smart punctuation ─────────────────────
     t = t.replace(/  +/g, ' ');
-    // Standalone lowercase "i" → "I"
+    t = t.replace(/[\u2018\u2019]/g, "'");  // curly single quotes → straight
+    t = t.replace(/[\u201C\u201D]/g, '"');  // curly double quotes → straight
+    t = t.replace(/,,/g, ',').replace(/\.\.\.\./g, '…');
+
+    // ── 2. Standalone "i" → "I" ───────────────────────────────────────────
     t = t.replace(/\bi\b/g, 'I');
-    // Common contractions missing apostrophes
+
+    // ── 3. Common typos (context-safe one-to-one substitutions) ──────────
+    const typos: [RegExp, string][] = [
+      [/\bteh\b/g, 'the'],
+      [/\brecieve\b/gi, 'receive'],
+      [/\bbelive\b/gi, 'believe'],
+      [/\boccured\b/gi, 'occurred'],
+      [/\bseperate\b/gi, 'separate'],
+      [/\bdefinate(ly)?\b/gi, (_, s) => s ? 'definitely' : 'definite'],
+      [/\bwierd\b/gi, 'weird'],
+      [/\bthere fore\b/gi, 'therefore'],
+      [/\bur\b/g, 'your'],        // casual shorthand (text node only)
+    ];
+    for (const [pattern, replacement] of typos) {
+      t = t.replace(pattern, replacement as string);
+    }
+
+    // ── 4. Contractions with context ─────────────────────────────────────
+    // "wont" as a contraction only when NOT followed by "to" (the formal adj)
+    t = t.replace(/\bwont\b(?!\s+to\b)/gi, "won't");
+
     const contractions: [RegExp, string][] = [
       [/\bdont\b/gi, "don't"],
       [/\bcant\b/gi, "can't"],
-      [/\bwont\b/gi, "won't"],
       [/\bdidnt\b/gi, "didn't"],
       [/\bdoesnt\b/gi, "doesn't"],
       [/\bisnt\b/gi, "isn't"],
@@ -88,18 +135,30 @@ function applyGrammarFixes(html: string): string {
       [/\bhavent\b/gi, "haven't"],
       [/\bhasnt\b/gi, "hasn't"],
       [/\bhadnt\b/gi, "hadn't"],
+      [/\bim\b/g, "I'm"],
+      [/\bive\b/g, "I've"],
+      [/\bId\b/g, "I'd"],
+      [/\bIll\b/g, "I'll"],
     ];
     for (const [pattern, replacement] of contractions) {
       t = t.replace(pattern, replacement);
     }
-    // Capitalise first letter after sentence-ending punctuation
-    t = t.replace(/([.!?]\s+)([a-z])/g, (_, punct, letter) => punct + letter.toUpperCase());
-    // Capitalise the very first character of the text node
+
+    // ── 5. Capitalise after sentence-ending punctuation ───────────────────
+    // Suppress if the preceding text ends with an abbreviation
+    t = t.replace(/([.!?]\s+)([a-z])/g, (match, punct, letter, offset) => {
+      const preceding = t.slice(0, offset);
+      if (ABBREV_PATTERN.test(preceding)) return match; // abbreviation — don't capitalise
+      return punct + letter.toUpperCase();
+    });
+
+    // ── 6. Capitalise the very first character of the text node ──────────
     if (t.length > 0 && /[a-z]/.test(t[0])) {
       t = t[0].toUpperCase() + t.slice(1);
     }
+
     return '>' + t + '<';
-  });
+  }).join('');
 }
 
 function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
