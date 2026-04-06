@@ -15,6 +15,8 @@ import { useUIStore, type ImportQueueItem } from '@/stores/uiStore';
 const CLIENT_COLORS = [
   '#a855f7', '#3b82f6', '#22c55e', '#f59e0b',
   '#f43f5e', '#06b6d4', '#8b5cf6', '#10b981',
+  '#ec4899', '#f97316', '#14b8a6', '#eab308',
+  '#6366f1', '#84cc16', '#dc2626', '#0ea5e9',
 ];
 
 // ── Dream file parser ─────────────────────────────────────────────────────────
@@ -186,12 +188,12 @@ export function AnalystPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Colour</Label>
-                  <div className="flex gap-1">
-                    {CLIENT_COLORS.slice(0, 4).map((c) => (
+                  <div className="grid grid-cols-8 gap-1">
+                    {CLIENT_COLORS.map((c) => (
                       <button
                         key={c}
                         onClick={() => setNewColor(c)}
-                        className="h-8 w-8 rounded border-2 transition-all"
+                        className="h-6 w-6 rounded border-2 transition-all"
                         style={{ backgroundColor: c, borderColor: newColor === c ? 'white' : 'transparent' }}
                       />
                     ))}

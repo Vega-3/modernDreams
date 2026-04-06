@@ -18,9 +18,15 @@ export function DreamList() {
     ? clients.find((c) => c.id === activeClientId) ?? null
     : null;
 
+  // Separate personal and professional views so they never intermix.
+  // Personal mode: show only dreams that have no client prefix.
+  // Professional mode (no specific client): show all client dreams.
+  // Professional mode (specific client selected): show only that client's dreams.
   const visibleDreams = activeClient
     ? dreams.filter((d) => extractClientName(d.waking_life_context) === activeClient.name)
-    : dreams;
+    : analystMode
+      ? dreams.filter((d) => extractClientName(d.waking_life_context) !== null)
+      : dreams.filter((d) => extractClientName(d.waking_life_context) === null);
 
   useEffect(() => {
     fetchDreams();
@@ -39,14 +45,20 @@ export function DreamList() {
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold mb-2">
-          {activeClient ? `No dreams for ${activeClient.name}` : 'No dreams yet'}
+          {activeClient
+            ? `No dreams for ${activeClient.name}`
+            : analystMode
+              ? 'No client dreams yet'
+              : 'No dreams yet'}
         </h3>
         <p className="text-muted-foreground mb-4">
           {activeClient
-            ? 'Import dreams for this client from the Analyst page.'
-            : 'Start recording your dreams to see them here'}
+            ? 'Import dreams for this client from the Professional page.'
+            : analystMode
+              ? 'Import client dreams from the Professional page.'
+              : 'Start recording your dreams to see them here'}
         </p>
-        {!activeClient && <Button onClick={() => openEditor()}>Record First Dream</Button>}
+        {!analystMode && <Button onClick={() => openEditor()}>Record First Dream</Button>}
       </div>
     );
   }

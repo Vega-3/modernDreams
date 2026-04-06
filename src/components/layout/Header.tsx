@@ -41,14 +41,14 @@ export function Header() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 min-w-[180px] justify-between px-4 font-medium border-2"
-              style={{ borderColor: activeClient.color, color: activeClient.color }}
+              className="gap-2 min-w-[240px] justify-between px-4 font-semibold border-2 text-sm h-9"
+              style={{ borderColor: activeClient.color, color: activeClient.color, backgroundColor: activeClient.color + '18' }}
             >
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: activeClient.color }} />
-                <span className="text-sm">{activeClient.name}</span>
+                <div className="h-3.5 w-3.5 rounded-full shrink-0" style={{ backgroundColor: activeClient.color }} />
+                <span>{activeClient.name}</span>
               </div>
-              <button onClick={() => setActiveClient(null)} className="rounded hover:bg-accent p-0.5">
+              <button onClick={() => setActiveClient(null)} className="rounded hover:bg-black/10 p-0.5 ml-2">
                 <X className="h-3.5 w-3.5" />
               </button>
             </Button>
@@ -58,10 +58,10 @@ export function Header() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2 min-w-[180px] justify-center font-medium border-2 border-primary/30 hover:border-primary/60"
+                  className="gap-2 min-w-[240px] justify-center font-semibold border-2 border-primary/50 hover:border-primary text-sm h-9 bg-primary/5 hover:bg-primary/10"
                 >
                   <Users className="h-4 w-4 text-primary" />
-                  <span className="text-sm">All Clients</span>
+                  <span className="text-primary">All Clients</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center">
