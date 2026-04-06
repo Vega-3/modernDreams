@@ -17,6 +17,7 @@ interface BinderPage {
 
 const PAGES: BinderPage[] = [
   { id: 'archetypes', label: 'Archetypes', url: '/ARCHETYPES.md', tab: 'Archetypes' },
+  { id: 'sleep', label: 'Sleep & Dream Recall', url: '/SLEEP.md', tab: 'Sleep & REM' },
   { id: 'guide', label: 'Using the Journal', url: '/GUIDE.md', tab: 'Guide' },
 ];
 
