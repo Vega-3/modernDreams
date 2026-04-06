@@ -592,18 +592,58 @@ export function DreamEditor() {
       );
       const result = await analyzeDream(dreamText, tagsJson, apiKey);
 
-      // Match suggested tag names (case-insensitive) to existing tags
+      // 1. Match suggested tag names (case-insensitive) to existing tags
       const lowerIndex = new Map(allTags.map((t) => [t.name.toLowerCase(), t]));
-      const newMatches = result.suggested_tag_names
+      const aiMatched = result.suggested_tag_names
         .map((n) => lowerIndex.get(n.toLowerCase()))
         .filter((t): t is Tag => t !== undefined)
         .filter((t) => !selectedTags.some((s) => s.id === t.id));
 
-      if (newMatches.length > 0) {
-        handleTagsChange([...selectedTags, ...newMatches]);
+      // 2. Run auto-match on the full dream text to catch additional tags
+      const text = editor.getText().toLowerCase();
+      const autoMatched = allTags.filter(
+        (tag) =>
+          !selectedTags.some((t) => t.id === tag.id) &&
+          !aiMatched.some((t) => t.id === tag.id) &&
+          (text.includes(tag.name.toLowerCase()) ||
+            tag.aliases.some((alias) => text.includes(alias.toLowerCase())))
+      );
+
+      const allNewTags = [...aiMatched, ...autoMatched];
+      const updatedTags = [...selectedTags, ...allNewTags];
+      if (allNewTags.length > 0) {
+        handleTagsChange(updatedTags);
       }
 
-      // Append theme suggestions to analysis notes
+      // 3. Apply in-text highlights for all newly added tags
+      if (allNewTags.length > 0 && editor) {
+        const doc = editor.state.doc;
+        const { tr } = editor.state;
+        const markType = editor.schema.marks.tagHighlight;
+        allNewTags.forEach((tag) => {
+          const searchTerms = [tag.name, ...tag.aliases].map((s) => s.toLowerCase());
+          doc.descendants((node, pos) => {
+            if (!node.isText || !node.text) return;
+            const lower = node.text.toLowerCase();
+            searchTerms.forEach((term) => {
+              let idx = lower.indexOf(term);
+              while (idx !== -1) {
+                const from = pos + idx;
+                const to = from + term.length;
+                const autoMark = markType.create({
+                  tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }],
+                  source: 'auto',
+                });
+                tr.addMark(from, to, autoMark);
+                idx = lower.indexOf(term, idx + 1);
+              }
+            });
+          });
+        });
+        editor.view.dispatch(tr);
+      }
+
+      // 4. Append theme suggestions to analysis notes
       if (result.theme_suggestions) {
         setAnalysisNotes((prev) =>
           prev.trim() ? `${prev.trim()}\n\n${result.theme_suggestions}` : result.theme_suggestions

@@ -248,9 +248,9 @@ Return ONLY a valid JSON object with exactly these two keys:
 
 Rules for suggested_tag_names:
 - Use existing tag names where possible (exact match, case-insensitive).
-- Suggest a new name only if no existing tag captures an important symbol or theme.
-- It should be difficult but not impossible to suggest a new tag — only do so for clear, recurring symbolic elements not covered by the list.
-- Return between 2 and 8 tag suggestions total."#,
+- Suggest a new name if no existing tag adequately captures a meaningful symbol, character, or theme.
+- New tag suggestions are welcome for any clearly distinct symbolic element, recurring figure, or emotional quality not already in the list — aim for concise, one-or-two-word names.
+- Return between 3 and 10 tag suggestions total."#,
     );
 
     let request = AnthropicRequest {
