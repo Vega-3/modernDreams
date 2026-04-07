@@ -50,6 +50,8 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Neon Noir theme**: Modern high-contrast dark theme with cyan primary and magenta secondary accents, sharp 0.25rem corners, monospace font (#28)
 - **Context-aware spell checker**: Grammar fix now suppresses capitalisation after abbreviations (Dr., Mr., etc.), correctly handles "wont to" vs "won't", and adds common typo corrections (recieve→receive, wierd→weird, teh→the, etc.) (#29)
 - **Characters tag tab**: The "People" tag category is renamed "Characters" and moved to the last position in the tag category tabs (#30)
+- **Spell-checker improvements**: Grammar fix now preserves the Jungian "Id" term, removes the over-aggressive "ur"→"your" substitution, and hoists regex arrays to module scope for faster repeated calls (#8)
+- **Bubble menu efficiency**: Active-tag lookup in the editor bubble menu is now computed once per render instead of once per tag/archetype button (#8)
 
 ## Prerequisites
 
