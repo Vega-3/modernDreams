@@ -71,6 +71,39 @@ interface EditorDraft {
 // These are common title/measurement abbreviations that end with a period.
 const ABBREV_PATTERN = /\b(?:Mr|Mrs|Ms|Dr|Prof|St|Jr|Sr|vs|etc|e\.g|i\.e|approx|dept|govt|Corp|Inc|Ltd|Vol|No|Apt|Ave|Blvd|Rd)\.\s*$/i;
 
+// Module-level constants so these arrays aren't reallocated on every text node.
+const TYPOS: [RegExp, string][] = [
+  [/\bteh\b/g, 'the'],
+  [/\brecieve\b/gi, 'receive'],
+  [/\bbelive\b/gi, 'believe'],
+  [/\boccured\b/gi, 'occurred'],
+  [/\bseperate\b/gi, 'separate'],
+  [/\bdefinately\b/gi, 'definitely'],
+  [/\bdefinate\b/gi, 'definite'],
+  [/\bwierd\b/gi, 'weird'],
+  [/\bthere fore\b/gi, 'therefore'],
+];
+
+const CONTRACTIONS: [RegExp, string][] = [
+  [/\bdont\b/gi, "don't"],
+  [/\bcant\b/gi, "can't"],
+  [/\bdidnt\b/gi, "didn't"],
+  [/\bdoesnt\b/gi, "doesn't"],
+  [/\bisnt\b/gi, "isn't"],
+  [/\bwasnt\b/gi, "wasn't"],
+  [/\bwerent\b/gi, "weren't"],
+  [/\bwouldnt\b/gi, "wouldn't"],
+  [/\bcouldnt\b/gi, "couldn't"],
+  [/\bshouldnt\b/gi, "shouldn't"],
+  [/\bhavent\b/gi, "haven't"],
+  [/\bhasnt\b/gi, "hasn't"],
+  [/\bhadnt\b/gi, "hadn't"],
+  [/\bim\b/g, "I'm"],
+  [/\bive\b/g, "I've"],
+  [/\bid\b/g, "I'd"],   // lowercase only — "Id" (capitalised) is a valid Jungian term
+  [/\bIll\b/g, "I'll"],
+];
+
 /**
  * Context-aware grammar and spelling fixes.
  *
@@ -86,10 +119,8 @@ const ABBREV_PATTERN = /\b(?:Mr|Mrs|Ms|Dr|Prof|St|Jr|Sr|vs|etc|e\.g|i\.e|approx|
  * - Standalone "i" → "I".
  */
 function applyGrammarFixes(html: string): string {
-  // Collect all text-node spans so we can do cross-node context checks
   const parts: string[] = html.split(/(>[^<]*<)/g);
 
-  // Two-pass: first collect plain text for context, then apply fixes per node
   return parts.map((part) => {
     // Only process text-node segments (between > and <)
     if (!part.startsWith('>') || !part.endsWith('<')) return part;
@@ -105,20 +136,8 @@ function applyGrammarFixes(html: string): string {
     // ── 2. Standalone "i" → "I" ───────────────────────────────────────────
     t = t.replace(/\bi\b/g, 'I');
 
-    // ── 3. Common typos (context-safe one-to-one substitutions) ──────────
-    const typos: [RegExp, string][] = [
-      [/\bteh\b/g, 'the'],
-      [/\brecieve\b/gi, 'receive'],
-      [/\bbelive\b/gi, 'believe'],
-      [/\boccured\b/gi, 'occurred'],
-      [/\bseperate\b/gi, 'separate'],
-      [/\bdefinately\b/gi, 'definitely'],
-      [/\bdefinate\b/gi, 'definite'],
-      [/\bwierd\b/gi, 'weird'],
-      [/\bthere fore\b/gi, 'therefore'],
-      [/\bur\b/g, 'your'],        // casual shorthand (text node only)
-    ];
-    for (const [pattern, replacement] of typos) {
+    // ── 3. Common typos ───────────────────────────────────────────────────
+    for (const [pattern, replacement] of TYPOS) {
       t = t.replace(pattern, replacement as string);
     }
 
@@ -126,26 +145,7 @@ function applyGrammarFixes(html: string): string {
     // "wont" as a contraction only when NOT followed by "to" (the formal adj)
     t = t.replace(/\bwont\b(?!\s+to\b)/gi, "won't");
 
-    const contractions: [RegExp, string][] = [
-      [/\bdont\b/gi, "don't"],
-      [/\bcant\b/gi, "can't"],
-      [/\bdidnt\b/gi, "didn't"],
-      [/\bdoesnt\b/gi, "doesn't"],
-      [/\bisnt\b/gi, "isn't"],
-      [/\bwasnt\b/gi, "wasn't"],
-      [/\bwerent\b/gi, "weren't"],
-      [/\bwouldnt\b/gi, "wouldn't"],
-      [/\bcouldnt\b/gi, "couldn't"],
-      [/\bshouldnt\b/gi, "shouldn't"],
-      [/\bhavent\b/gi, "haven't"],
-      [/\bhasnt\b/gi, "hasn't"],
-      [/\bhadnt\b/gi, "hadn't"],
-      [/\bim\b/g, "I'm"],
-      [/\bive\b/g, "I've"],
-      [/\bId\b/g, "I'd"],
-      [/\bIll\b/g, "I'll"],
-    ];
-    for (const [pattern, replacement] of contractions) {
+    for (const [pattern, replacement] of CONTRACTIONS) {
       t = t.replace(pattern, replacement);
     }
 
@@ -601,7 +601,7 @@ export function DreamEditor() {
     // Build search-term → tag map for efficient per-node lookup
     const termMap = new Map<string, Tag>();
     tagsToHighlight.forEach((tag) => {
-      [tag.name, ...tag.aliases].forEach((s) => termMap.set(s.toLowerCase(), tag));
+      [tag.name, ...(tag.aliases ?? [])].forEach((s) => termMap.set(s.toLowerCase(), tag));
     });
     editor.state.doc.descendants((node, pos) => {
       if (!node.isText || !node.text) return;
@@ -1041,11 +1041,14 @@ export function DreamEditor() {
                     shouldShow={({ from, to }) => from !== to}
                   >
                     <div className="flex flex-col gap-1 bg-popover border rounded-md shadow-lg p-1.5 max-w-sm">
+                      {/* Compute once — used by both the tags row and archetypes row below */}
+                      {(() => {
+                      const activeTags: TagRef[] = editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [];
+                      return (<>
                       {/* Tags row */}
                       {selectedTags.length > 0 && (
                         <div className="flex gap-1 flex-wrap">
                           {[...selectedTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
-                            const activeTags: TagRef[] = editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [];
                             const isActive = activeTags.some((t) => t.tagId === tag.id);
                             return (
                               <button
@@ -1069,7 +1072,6 @@ export function DreamEditor() {
                         <div className="flex gap-1 flex-wrap">
                           {archetypes.map((arch) => {
                             const archTagId = `${ARCHETYPE_TAG_PREFIX}${arch.id}`;
-                            const activeTags: TagRef[] = editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [];
                             const isActive = activeTags.some((t) => t.tagId === archTagId);
                             return (
                               <button
@@ -1086,6 +1088,7 @@ export function DreamEditor() {
                           })}
                         </div>
                       )}
+                      </>); })()}
                     </div>
                   </BubbleMenu>
                 )}
