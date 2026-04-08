@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -261,6 +261,10 @@ export function DreamEditor() {
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [clarityRating, setClarityRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const sortedSelectedTags = useMemo(
+    () => [...selectedTags].sort((a, b) => a.name.localeCompare(b.name)),
+    [selectedTags],
+  );
   const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [wakingLifeContext, setWakingLifeContext] = useState('');
@@ -601,7 +605,7 @@ export function DreamEditor() {
     // Build search-term → tag map for efficient per-node lookup
     const termMap = new Map<string, Tag>();
     tagsToHighlight.forEach((tag) => {
-      [tag.name, ...(tag.aliases ?? [])].forEach((s) => termMap.set(s.toLowerCase(), tag));
+      [tag.name, ...tag.aliases].forEach((s) => termMap.set(s.toLowerCase(), tag));
     });
     editor.state.doc.descendants((node, pos) => {
       if (!node.isText || !node.text) return;
@@ -749,6 +753,10 @@ export function DreamEditor() {
       {children}
     </Button>
   );
+
+  const activeTags: TagRef[] = editor
+    ? (editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [])
+    : [];
 
   return (
     <>
@@ -1041,14 +1049,10 @@ export function DreamEditor() {
                     shouldShow={({ from, to }) => from !== to}
                   >
                     <div className="flex flex-col gap-1 bg-popover border rounded-md shadow-lg p-1.5 max-w-sm">
-                      {/* Compute once — used by both the tags row and archetypes row below */}
-                      {(() => {
-                      const activeTags: TagRef[] = editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [];
-                      return (<>
                       {/* Tags row */}
                       {selectedTags.length > 0 && (
                         <div className="flex gap-1 flex-wrap">
-                          {[...selectedTags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
+                          {sortedSelectedTags.map((tag) => {
                             const isActive = activeTags.some((t) => t.tagId === tag.id);
                             return (
                               <button
@@ -1088,7 +1092,6 @@ export function DreamEditor() {
                           })}
                         </div>
                       )}
-                      </>); })()}
                     </div>
                   </BubbleMenu>
                 )}
