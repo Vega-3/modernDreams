@@ -52,6 +52,7 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Characters tag tab**: The "People" tag category is renamed "Characters" and moved to the last position in the tag category tabs (#30)
 - **Spell-checker improvements**: Grammar fix now preserves the Jungian "Id" term, removes the over-aggressive "ur"→"your" substitution, and hoists regex arrays to module scope for faster repeated calls (#8)
 - **Bubble menu efficiency**: Active-tag lookup in the editor bubble menu is now computed once per render instead of once per tag/archetype button (#8)
+- **BubbleMenu render optimisation**: Sorted tag list memoized on tag change; active-tag mark extraction moved to component scope, removing IIFE anti-pattern from JSX (#8)
 
 ## Prerequisites
 
