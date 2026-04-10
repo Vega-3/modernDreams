@@ -50,7 +50,7 @@ interface UIState {
   clearImportQueue: () => void;
 }
 
-export const useUIStore = create<UIState>((set, get) => ({
+export const useUIStore = create<UIState>((set) => ({
   currentView: 'journal',
   sidebarCollapsed: false,
   searchOpen: false,
@@ -82,15 +82,14 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   startImportQueue: (items) => set({ importQueue: items, importQueueIndex: 0, editorOpen: items.length > 0 }),
 
-  advanceImportQueue: () => {
-    const { importQueueIndex, importQueue } = get();
-    const next = importQueueIndex + 1;
-    if (next < importQueue.length) {
-      set({ importQueueIndex: next, editorOpen: true });
-    } else {
-      set({ importQueue: [], importQueueIndex: 0, editorOpen: false });
-    }
-  },
+  advanceImportQueue: () =>
+    set((state) => {
+      const next = state.importQueueIndex + 1;
+      if (next < state.importQueue.length) {
+        return { importQueueIndex: next, editorOpen: true };
+      }
+      return { importQueue: [], importQueueIndex: 0, editorOpen: false };
+    }),
 
   clearImportQueue: () => set({ importQueue: [], importQueueIndex: 0 }),
 }));

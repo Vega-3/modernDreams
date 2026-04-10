@@ -20,7 +20,7 @@ import {
 import { TagPicker } from '@/components/tags/TagPicker';
 import { TagHighlight } from '@/components/dreams/TagHighlightExtension';
 import type { TagRef } from '@/components/dreams/TagHighlightExtension';
-import { cn } from '@/lib/utils';
+import { cn, sortByName } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useTagStore } from '@/stores/tagStore';
 import type { Tag, WordTagAssociation } from '@/lib/tauri';
@@ -28,6 +28,8 @@ import type { Tag, WordTagAssociation } from '@/lib/tauri';
 function extractWordTagAssociations(editor: ReturnType<typeof useEditor>): WordTagAssociation[] {
   if (!editor) return [];
   const associations: WordTagAssociation[] = [];
+  const seen = new Set<string>();
+  // Handwriting preview has no paragraph structure — all words share paragraph_index 0.
   editor.state.doc.descendants((node) => {
     if (!node.isText) return;
     node.marks.forEach((mark) => {
@@ -36,18 +38,18 @@ function extractWordTagAssociations(editor: ReturnType<typeof useEditor>): WordT
         if (!word) return;
         const tags: TagRef[] = mark.attrs.tags ?? [];
         tags.forEach(({ tagId }) => {
-          if (tagId) associations.push({ tag_id: tagId, word });
+          if (tagId) {
+            const key = `${tagId}:${word.toLowerCase()}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              associations.push({ tag_id: tagId, word, paragraph_index: 0 });
+            }
+          }
         });
       }
     });
   });
-  const seen = new Set<string>();
-  return associations.filter(({ tag_id, word }) => {
-    const key = `${tag_id}:${word.toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return associations;
 }
 
 interface RecognizedDream {
@@ -275,6 +277,10 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   const hasRaw = currentDream.rawTranscript.trim().length > 0;
   const hasEnglish = currentDream.englishTranscript.trim().length > 0;
 
+  const activeTags: TagRef[] = editor
+    ? (editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [])
+    : [];
+
   return (
     <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -396,11 +402,7 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
                   shouldShow={({ from, to }) => from !== to}
                 >
                   <div className="flex gap-1 bg-popover border rounded-md shadow-lg p-1.5 flex-wrap max-w-xs">
-                    {[...currentForm.tags].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
-                      const activeMark = editor.state.selection.$from
-                        .marks()
-                        .find((m) => m.type.name === 'tagHighlight');
-                      const activeTags: TagRef[] = activeMark?.attrs.tags ?? [];
+                    {sortByName(currentForm.tags).map((tag) => {
                       const isActive = activeTags.some((t) => t.tagId === tag.id);
                       return (
                         <button

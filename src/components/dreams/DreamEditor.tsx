@@ -39,7 +39,7 @@ import {
 import { TagPicker } from '@/components/tags/TagPicker';
 import { TagHighlight } from './TagHighlightExtension';
 import type { TagRef, MarkSource } from './TagHighlightExtension';
-import { cn } from '@/lib/utils';
+import { cn, sortByName } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
@@ -138,7 +138,7 @@ function applyGrammarFixes(html: string): string {
 
     // ── 3. Common typos ───────────────────────────────────────────────────
     for (const [pattern, replacement] of TYPOS) {
-      t = t.replace(pattern, replacement as string);
+      t = t.replace(pattern, replacement);
     }
 
     // ── 4. Contractions with context ─────────────────────────────────────
@@ -168,6 +168,7 @@ function applyGrammarFixes(html: string): string {
 
 function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
   const associations: WordTagAssociation[] = [];
+  const seen = new Set<string>();
   // Iterate top-level block nodes to track paragraph index.
   // Each direct child of the document is a block (paragraph, heading, listItem, etc.)
   let paragraphIndex = 0;
@@ -183,7 +184,11 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
           const tags: TagRef[] = mark.attrs.tags ?? [];
           tags.forEach(({ tagId }) => {
             if (tagId && !tagId.startsWith(ARCHETYPE_TAG_PREFIX)) {
-              associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex });
+              const key = `${tagId}:${word.toLowerCase()}:${paragraphIndex}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex });
+              }
             }
           });
         }
@@ -191,14 +196,7 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
     });
     paragraphIndex++;
   });
-  // Deduplicate by tag_id + word + paragraph_index
-  const seen = new Set<string>();
-  return associations.filter(({ tag_id, word, paragraph_index }) => {
-    const key = `${tag_id}:${word.toLowerCase()}:${paragraph_index}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return associations;
 }
 
 /**
@@ -261,10 +259,7 @@ export function DreamEditor() {
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [clarityRating, setClarityRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
-  const sortedSelectedTags = useMemo(
-    () => [...selectedTags].sort((a, b) => a.name.localeCompare(b.name)),
-    [selectedTags],
-  );
+  const sortedSelectedTags = useMemo(() => sortByName(selectedTags), [selectedTags]);
   const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [wakingLifeContext, setWakingLifeContext] = useState('');
@@ -504,8 +499,9 @@ export function DreamEditor() {
       const restoredTags = allTags.filter((t) => draft.selectedTagIds?.includes(t.id));
       setSelectedTags(restoredTags);
       draftRestoredRef.current = true;
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn('Failed to restore draft from localStorage:', e);
+      return;
     }
     setShowDraftBanner(false);
   };
@@ -543,13 +539,13 @@ export function DreamEditor() {
         });
       } else {
         // Derive waking_life_context: if a client is selected in professional mode,
-      // prefix with client tag; otherwise use the raw textarea value.
-      const clientName = analystMode && selectedClientId
-        ? clients.find((c) => c.id === selectedClientId)?.name ?? null
-        : null;
-      const effectiveContext = clientName
-        ? clientPrefix(clientName) + (wakingLifeContext.trim() ? ' ' + wakingLifeContext.trim() : '')
-        : wakingLifeContext.trim() || null;
+        // prefix with client tag; otherwise use the raw textarea value.
+        const clientName = analystMode && selectedClientId
+          ? clients.find((c) => c.id === selectedClientId)?.name ?? null
+          : null;
+        const effectiveContext = clientName
+          ? clientPrefix(clientName) + (wakingLifeContext.trim() ? ' ' + wakingLifeContext.trim() : '')
+          : wakingLifeContext.trim() || null;
 
       const newDream = await createDream({
           title: title.trim(),
@@ -717,7 +713,7 @@ export function DreamEditor() {
   };
 
   /** Toggle a tagHighlight mark ref (tag or archetype) on the current selection. */
-  const toggleMarkRef = (id: string, color: string, name: string) => {
+  const toggleMarkRef = useCallback((id: string, color: string, name: string) => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     const existingMark = editor.state.doc
@@ -732,7 +728,7 @@ export function DreamEditor() {
     } else {
       editor.chain().focus().setMark('tagHighlight', { tags: next }).run();
     }
-  };
+  }, [editor]);
 
   const ToolbarButton = ({
     onClick,
@@ -754,9 +750,13 @@ export function DreamEditor() {
     </Button>
   );
 
-  const activeTags: TagRef[] = editor
-    ? (editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [])
-    : [];
+  // Recompute only when the editor state changes (selection or content), not on every
+  // unrelated React re-render (e.g. tagHoverInfo updates during mouse events).
+  const activeTags = useMemo<TagRef[]>(
+    () => editor?.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor?.state],
+  );
 
   return (
     <>

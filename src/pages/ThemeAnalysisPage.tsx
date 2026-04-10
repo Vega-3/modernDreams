@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useTagStore } from '@/stores/tagStore';
-import { getCategoryColor } from '@/lib/utils';
+import { getCategoryColor, sortByName } from '@/lib/utils';
 import { getTagNotes, saveTagNotes } from '@/lib/tauri';
 import type { Tag, Dream } from '@/lib/tauri';
 
@@ -61,7 +61,7 @@ export function ThemeAnalysisPage() {
     ? dreams.filter((d) => d.tags.some((t) => t.id === selectedTag.id))
     : [];
 
-  const sortedTags = [...tags].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedTags = useMemo(() => sortByName(tags), [tags]);
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
