@@ -53,6 +53,10 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Spell-checker improvements**: Grammar fix now preserves the Jungian "Id" term, removes the over-aggressive "ur"→"your" substitution, and hoists regex arrays to module scope for faster repeated calls (#8)
 - **Bubble menu efficiency**: Active-tag lookup in the editor bubble menu is now computed once per render instead of once per tag/archetype button (#8)
 - **BubbleMenu render optimisation**: Sorted tag list memoized on tag change; active-tag mark extraction moved to component scope, removing IIFE anti-pattern from JSX (#8)
+- **sortByName utility**: Shared generic sort helper extracted to `src/lib/utils.ts` and used across DreamEditor, ThemeAnalysisPage, and HandwritingPreview in place of repeated inline spread-sort patterns (#8)
+- **Single-pass word-tag deduplication**: `extractWordTagAssociations` now deduplicates inline during document traversal instead of a second filter pass; fixes missing `paragraph_index` in handwriting preview associations (#8)
+- **activeTags memoization**: Mark lookup for the bubble menu is wrapped in `useMemo` keyed on editor state so it skips recomputation on unrelated React re-renders (e.g. mouse-hover updates) (#8)
+- **Atomic import-queue advance**: `advanceImportQueue` store action now uses the updater-function form of Zustand `set` to eliminate the read/write race between `get()` and `set()` (#8)
 
 ## Prerequisites
 
