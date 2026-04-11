@@ -57,6 +57,10 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Single-pass word-tag deduplication**: `extractWordTagAssociations` now deduplicates inline during document traversal instead of a second filter pass; fixes missing `paragraph_index` in handwriting preview associations (#8)
 - **activeTags memoization**: Mark lookup for the bubble menu is wrapped in `useMemo` keyed on editor state so it skips recomputation on unrelated React re-renders (e.g. mouse-hover updates) (#8)
 - **Atomic import-queue advance**: `advanceImportQueue` store action now uses the updater-function form of Zustand `set` to eliminate the read/write race between `get()` and `set()` (#8)
+- **TAG_HIGHLIGHT constant**: Mark name extracted to a shared constant in `TagHighlightExtension.ts` and used throughout DreamEditor and HandwritingPreview, eliminating stringly-typed `'tagHighlight'` literals (#8)
+- **Auto-highlight undo safety**: Auto-applied tag highlights are now excluded from the undo stack (`addToHistory: false`) and focus is restored to the editor after applying, so Ctrl+Z correctly undoes the user's last typed character rather than a highlight (#8)
+- **Parallel dream save**: `handleSaveAll` in the handwriting preview now saves all recognised dreams concurrently with `Promise.all` instead of sequentially, reducing total save time by N× (#8)
+- **updateCurrentForm state safety**: Functional state updater in HandwritingPreview now reads from the previous state argument instead of a render-closure snapshot, eliminating a stale-closure race when React batches updates (#8)
 
 ## Prerequisites
 

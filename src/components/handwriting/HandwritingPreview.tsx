@@ -18,7 +18,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { TagPicker } from '@/components/tags/TagPicker';
-import { TagHighlight } from '@/components/dreams/TagHighlightExtension';
+import { TagHighlight, TAG_HIGHLIGHT } from '@/components/dreams/TagHighlightExtension';
 import type { TagRef } from '@/components/dreams/TagHighlightExtension';
 import { cn, sortByName } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -33,7 +33,7 @@ function extractWordTagAssociations(editor: ReturnType<typeof useEditor>): WordT
   editor.state.doc.descendants((node) => {
     if (!node.isText) return;
     node.marks.forEach((mark) => {
-      if (mark.type.name === 'tagHighlight' && node.text) {
+      if (mark.type.name === TAG_HIGHLIGHT && node.text) {
         const word = node.text.trim();
         if (!word) return;
         const tags: TagRef[] = mark.attrs.tags ?? [];
@@ -162,8 +162,8 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   const totalDreams = recognizedDreams.length;
 
   const updateCurrentForm = (updates: Partial<DreamFormData>) => {
-    setFormData(() => {
-      const newData = [...resolvedFormData];
+    setFormData((prev) => {
+      const newData = [...prev];
       newData[currentIndex] = { ...newData[currentIndex], ...updates };
       return newData;
     });
@@ -230,24 +230,24 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
 
   const handleSaveAll = async () => {
     setIsSaving(true);
+    const editorAssociations = extractWordTagAssociations(editor);
     try {
-      for (let i = 0; i < resolvedFormData.length; i++) {
-        const form = resolvedFormData[i];
-        if (!form.title.trim() || !form.content.trim()) continue;
-
-        await createDream({
-          title: form.title.trim(),
-          content_html: `<p>${form.content.replace(/\n/g, '</p><p>')}</p>`,
-          content_plain: form.content,
-          dream_date: form.dreamDate,
-          is_lucid: form.isLucid,
-          mood_rating: form.moodRating,
-          clarity_rating: form.clarityRating,
-          tag_ids: form.tags.map((t) => t.id),
-          word_tag_associations: i === currentIndex ? extractWordTagAssociations(editor) : [],
-        });
-      }
-
+      await Promise.all(
+        resolvedFormData.map((form, i) => {
+          if (!form.title.trim() || !form.content.trim()) return Promise.resolve();
+          return createDream({
+            title: form.title.trim(),
+            content_html: `<p>${form.content.replace(/\n/g, '</p><p>')}</p>`,
+            content_plain: form.content,
+            dream_date: form.dreamDate,
+            is_lucid: form.isLucid,
+            mood_rating: form.moodRating,
+            clarity_rating: form.clarityRating,
+            tag_ids: form.tags.map((t) => t.id),
+            word_tag_associations: i === currentIndex ? editorAssociations : [],
+          });
+        })
+      );
       handleClose();
     } catch (error) {
       console.error('Failed to save dreams:', error);
@@ -278,7 +278,7 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
   const hasEnglish = currentDream.englishTranscript.trim().length > 0;
 
   const activeTags: TagRef[] = editor
-    ? (editor.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [])
+    ? (editor.state.selection.$from.marks().find((m) => m.type.name === TAG_HIGHLIGHT)?.attrs.tags ?? [])
     : [];
 
   return (
@@ -412,17 +412,17 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
                             e.preventDefault();
                             const { from, to } = editor.state.selection;
                             const existingMark = editor.state.doc
-                              .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
-                              ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
+                              .rangeHasMark(from, to, editor.schema.marks[TAG_HIGHLIGHT])
+                              ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === TAG_HIGHLIGHT)
                               : null;
                             const currentTags: TagRef[] = existingMark?.attrs.tags ?? [];
                             const newTags = isActive
                               ? currentTags.filter((t) => t.tagId !== tag.id)
                               : [...currentTags, { tagId: tag.id, tagColor: tag.color, tagName: tag.name }];
                             if (newTags.length === 0) {
-                              editor.chain().focus().unsetMark('tagHighlight').run();
+                              editor.chain().focus().unsetMark(TAG_HIGHLIGHT).run();
                             } else {
-                              editor.chain().focus().setMark('tagHighlight', { tags: newTags }).run();
+                              editor.chain().focus().setMark(TAG_HIGHLIGHT, { tags: newTags }).run();
                             }
                           }}
                           className={cn(

@@ -1,5 +1,7 @@
 import { Mark, mergeAttributes } from '@tiptap/core';
 
+export const TAG_HIGHLIGHT = 'tagHighlight';
+
 export interface TagRef {
   tagId: string;
   tagColor: string;
@@ -18,7 +20,7 @@ export type MarkSource = 'manual' | 'auto';
  * into the new array format on load.
  */
 export const TagHighlight = Mark.create({
-  name: 'tagHighlight',
+  name: TAG_HIGHLIGHT,
 
   inclusive: false,
 

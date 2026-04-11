@@ -37,7 +37,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { TagPicker } from '@/components/tags/TagPicker';
-import { TagHighlight } from './TagHighlightExtension';
+import { TagHighlight, TAG_HIGHLIGHT } from './TagHighlightExtension';
 import type { TagRef, MarkSource } from './TagHighlightExtension';
 import { cn, sortByName } from '@/lib/utils';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -176,7 +176,7 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
     blockNode.descendants((node) => {
       if (!node.isText) return;
       node.marks.forEach((mark) => {
-        if (mark.type.name === 'tagHighlight' && node.text) {
+        if (mark.type.name === TAG_HIGHLIGHT && node.text) {
           // Skip auto-applied marks — only persist manual associations
           if ((mark.attrs.source as MarkSource) === 'auto') return;
           const word = node.text.trim();
@@ -208,7 +208,7 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
  */
 function makeRemoveTagCommand(tagId: string, from: number, to: number) {
   return ({ tr, state }: { tr: import('@tiptap/pm/state').Transaction; state: import('@tiptap/pm/state').EditorState }) => {
-    const markType = state.schema.marks['tagHighlight'];
+    const markType = state.schema.marks[TAG_HIGHLIGHT];
     if (!markType) return false;
 
     let changed = false;
@@ -596,7 +596,7 @@ export function DreamEditor() {
    */
   const applyAutoHighlights = (tagsToHighlight: Tag[]) => {
     if (!editor || tagsToHighlight.length === 0) return;
-    const markType = editor.schema.marks.tagHighlight;
+    const markType = editor.schema.marks[TAG_HIGHLIGHT];
     const { tr } = editor.state;
     // Build search-term → tag map for efficient per-node lookup
     const termMap = new Map<string, Tag>();
@@ -618,7 +618,11 @@ export function DreamEditor() {
         }
       });
     });
+    // Keep auto-highlights outside the undo stack so Ctrl+Z doesn't undo
+    // a highlight instead of the user's last typed character.
+    tr.setMeta('addToHistory', false);
     editor.view.dispatch(tr);
+    editor.commands.focus();
   };
 
   const handleAutoMatchTags = () => {
@@ -717,16 +721,16 @@ export function DreamEditor() {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     const existingMark = editor.state.doc
-      .rangeHasMark(from, to, editor.schema.marks.tagHighlight)
-      ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === 'tagHighlight')
+      .rangeHasMark(from, to, editor.schema.marks[TAG_HIGHLIGHT])
+      ? editor.state.doc.resolve(from).marks().find((m) => m.type.name === TAG_HIGHLIGHT)
       : null;
     const current: TagRef[] = existingMark?.attrs.tags ?? [];
     const isActive = current.some((t) => t.tagId === id);
     const next = isActive ? current.filter((t) => t.tagId !== id) : [...current, { tagId: id, tagColor: color, tagName: name }];
     if (next.length === 0) {
-      editor.chain().focus().unsetMark('tagHighlight').run();
+      editor.chain().focus().unsetMark(TAG_HIGHLIGHT).run();
     } else {
-      editor.chain().focus().setMark('tagHighlight', { tags: next }).run();
+      editor.chain().focus().setMark(TAG_HIGHLIGHT, { tags: next }).run();
     }
   }, [editor]);
 
@@ -753,7 +757,7 @@ export function DreamEditor() {
   // Recompute only when the editor state changes (selection or content), not on every
   // unrelated React re-render (e.g. tagHoverInfo updates during mouse events).
   const activeTags = useMemo<TagRef[]>(
-    () => editor?.state.selection.$from.marks().find((m) => m.type.name === 'tagHighlight')?.attrs.tags ?? [],
+    () => editor?.state.selection.$from.marks().find((m) => m.type.name === TAG_HIGHLIGHT)?.attrs.tags ?? [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor?.state],
   );
