@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSeriesStore, suggestSeriesFromDreams, type DreamSeries } from '@/stores/seriesStore';
 import { useDreamStore } from '@/stores/dreamStore';
-import { getCategoryColor } from '@/lib/utils';
+import { cn, getCategoryColor } from '@/lib/utils';
 import type { Dream } from '@/lib/tauri';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -345,14 +345,16 @@ export function SeriesPage() {
   const { series, createSeries } = useSeriesStore();
   const { dreams } = useDreamStore();
   const [newName, setNewName] = useState('');
+  const [activeSeries, setActiveSeries] = useState<string | null>(null);
 
   const dreamMap = useMemo(() => new Map(dreams.map((d) => [d.id, d])), [dreams]);
   const existingDreamIds = new Set(series.flatMap((s) => s.dreamIds));
 
   const handleCreate = () => {
     if (!newName.trim()) return;
-    createSeries(newName);
+    const s = createSeries(newName);
     setNewName('');
+    setActiveSeries(s.id);
   };
 
   const handleAcceptSuggestion = useCallback(
@@ -377,8 +379,7 @@ export function SeriesPage() {
         <div>
           <h2 className="text-sm font-semibold mb-0.5">Dream Series</h2>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Group related dreams into a series to track the longitudinal arc of psychic
-            movement and symbolic evolution over time.
+            Group related dreams to track symbolic evolution over time.
           </p>
         </div>
 
@@ -398,6 +399,34 @@ export function SeriesPage() {
             </Button>
           </div>
         </div>
+
+        {/* Existing series list */}
+        {series.length > 0 && (
+          <div className="flex flex-col gap-0.5 border-t pt-2">
+            <p className="text-[11px] font-medium text-muted-foreground mb-1">All series</p>
+            <ScrollArea className="max-h-[calc(100vh-22rem)]">
+              <div className="space-y-0.5 pr-1">
+                {series.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveSeries(activeSeries === s.id ? null : s.id)}
+                    className={cn(
+                      'w-full text-left text-xs px-2 py-1.5 rounded-md transition-colors',
+                      activeSeries === s.id
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'hover:bg-muted text-foreground/80',
+                    )}
+                  >
+                    <span className="truncate block">{s.name}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {s.dreamIds.length} dream{s.dreamIds.length !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
 
         <div className="text-xs text-muted-foreground border-t pt-2">
           {series.length} series · {dreams.length} dreams
@@ -420,7 +449,7 @@ export function SeriesPage() {
               Create a series to begin tracking dream sequences.
             </div>
           ) : (
-            series.map((s) => (
+            (activeSeries ? series.filter((s) => s.id === activeSeries) : series).map((s) => (
               <SeriesCard key={s.id} series={s} allDreams={dreams} dreamMap={dreamMap} />
             ))
           )}
