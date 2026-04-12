@@ -201,7 +201,7 @@ pub fn get_tag_word_associations(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT wta.word, d.id, d.title, d.dream_date
+            SELECT wta.word, d.id, d.title, d.dream_date, wta.source
             FROM word_tag_associations wta
             JOIN dreams d ON d.id = wta.dream_id
             WHERE wta.tag_id = ?1
@@ -217,6 +217,7 @@ pub fn get_tag_word_associations(
                 dream_id: row.get(1)?,
                 dream_title: row.get(2)?,
                 dream_date: row.get(3)?,
+                source: row.get(4).ok(),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -227,4 +228,21 @@ pub fn get_tag_word_associations(
     }
 
     Ok(result)
+}
+
+/// Delete a single word-tag association (removes a learned association entry).
+#[tauri::command]
+pub fn delete_word_tag_association(
+    dream_id: String,
+    tag_id: String,
+    word: String,
+    db: State<'_, DbConnection>,
+) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM word_tag_associations WHERE dream_id = ?1 AND tag_id = ?2 AND word = ?3",
+        params![dream_id, tag_id, word],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
