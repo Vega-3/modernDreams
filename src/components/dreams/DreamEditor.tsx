@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
+import { Extension, InputRule } from '@tiptap/core';
 import {
   Bold,
   Italic,
@@ -20,6 +21,7 @@ import {
   ImagePlus,
   X,
   Brain,
+  Tags,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -46,10 +48,51 @@ import { useTagStore } from '@/stores/tagStore';
 import { useArchetypeStore } from '@/stores/archetypeStore';
 import { useAnalystStore, clientPrefix } from '@/stores/analystStore';
 import type { Tag, WordTagAssociation } from '@/lib/tauri';
-import { analyzeDream } from '@/lib/tauri';
+import { analyzeDream, aiTagDream } from '@/lib/tauri';
 import type { Editor } from '@tiptap/core';
 
 const DRAFT_KEY = 'dreams_new_dream_draft';
+const getEditBackupKey = (id: string) => `dreams_edit_backup_${id}`;
+
+/**
+ * TipTap Extension that converts [[tag_name]] typed inline into a TagHighlight
+ * mark. Uses a ref so the tag list is always current without recreating the editor.
+ */
+function makeInlineTagExtension(allTagsRef: React.MutableRefObject<Tag[]>) {
+  return Extension.create({
+    name: 'inlineTagInput',
+    addInputRules() {
+      const markName = TAG_HIGHLIGHT;
+      return [
+        new InputRule({
+          find: /\[\[([^\]]+)\]\]$/,
+          handler({ state, range, match }) {
+            const tagName = match[1]?.trim();
+            if (!tagName) return;
+            const tag = allTagsRef.current.find(
+              (t) => t.name.toLowerCase() === tagName.toLowerCase(),
+            );
+            if (!tag) return;
+            const markType = state.schema.marks[markName];
+            if (!markType) return;
+            const { tr } = state;
+            tr.replaceWith(range.from, range.to, state.schema.text(tag.name));
+            tr.addMark(
+              range.from,
+              range.from + tag.name.length,
+              markType.create({
+                tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }],
+                source: 'manual',
+              }),
+            );
+            tr.removeStoredMark(markType);
+            // Dispatch is handled by TipTap's InputRule system
+          },
+        }),
+      ];
+    },
+  });
+}
 
 // Prefix used to store archetype refs in the tagHighlight mark alongside regular tags.
 // Must be filtered out when extracting word-tag associations (see extractWordTagAssociations).
@@ -61,6 +104,7 @@ interface EditorDraft {
   isLucid: boolean;
   moodRating: number | null;
   clarityRating: number | null;
+  meaningfulnessRating: number | null;
   selectedTagIds: string[];
   wakingLifeContext: string;
   contentHtml: string;
@@ -169,25 +213,22 @@ function applyGrammarFixes(html: string): string {
 function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
   const associations: WordTagAssociation[] = [];
   const seen = new Set<string>();
-  // Iterate top-level block nodes to track paragraph index.
-  // Each direct child of the document is a block (paragraph, heading, listItem, etc.)
   let paragraphIndex = 0;
   editor.state.doc.forEach((blockNode) => {
     blockNode.descendants((node) => {
       if (!node.isText) return;
       node.marks.forEach((mark) => {
         if (mark.type.name === TAG_HIGHLIGHT && node.text) {
-          // Skip auto-applied marks — only persist manual associations
-          if ((mark.attrs.source as MarkSource) === 'auto') return;
+          const source = (mark.attrs.source as MarkSource) ?? 'manual';
           const word = node.text.trim();
           if (!word) return;
           const tags: TagRef[] = mark.attrs.tags ?? [];
           tags.forEach(({ tagId }) => {
             if (tagId && !tagId.startsWith(ARCHETYPE_TAG_PREFIX)) {
-              const key = `${tagId}:${word.toLowerCase()}:${paragraphIndex}`;
+              const key = `${tagId}:${word.toLowerCase()}:${paragraphIndex}:${source}`;
               if (!seen.has(key)) {
                 seen.add(key);
-                associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex });
+                associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex, source });
               }
             }
           });
@@ -233,9 +274,12 @@ function makeRemoveTagCommand(tagId: string, from: number, to: number) {
 }
 
 function removeTagMarksFromEditor(editor: Editor, tagId: string) {
+  if (!editor || (editor as Editor & { isDestroyed?: boolean }).isDestroyed) return;
   try {
+    const docSize = editor.state.doc.content.size;
+    if (docSize === 0) return;
     editor.chain()
-      .command(makeRemoveTagCommand(tagId, 0, editor.state.doc.content.size))
+      .command(makeRemoveTagCommand(tagId, 0, docSize))
       .run();
   } catch (e) {
     console.warn('Failed to remove tag marks:', e);
@@ -252,12 +296,17 @@ export function DreamEditor() {
   // Current import queue item (if any)
   const currentQueueItem = importQueue.length > 0 ? importQueue[importQueueIndex] : null;
 
+  // Keep a live ref to allTags so the inline-tag InputRule always sees current tags
+  const allTagsRef = useRef(allTags);
+  useEffect(() => { allTagsRef.current = allTags; }, [allTags]);
+
   const [title, setTitle] = useState('');
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [dreamDate, setDreamDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isLucid, setIsLucid] = useState(false);
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [clarityRating, setClarityRating] = useState<number | null>(null);
+  const [meaningfulnessRating, setMeaningfulnessRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const sortedSelectedTags = useMemo(() => sortByName(selectedTags), [selectedTags]);
   const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>([]);
@@ -266,6 +315,7 @@ export function DreamEditor() {
   const [analysisNotes, setAnalysisNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isAnalysing, setIsAnalysing] = useState(false);
+  const [isAITagging, setIsAITagging] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const draftRestoredRef = useRef(false);
@@ -301,6 +351,7 @@ export function DreamEditor() {
         allowBase64: true,
       }),
       TagHighlight,
+      makeInlineTagExtension(allTagsRef),
     ],
     content: '',
     editorProps: {
@@ -326,6 +377,7 @@ export function DreamEditor() {
       setIsLucid(editingDream.is_lucid);
       setMoodRating(editingDream.mood_rating);
       setClarityRating(editingDream.clarity_rating);
+      setMeaningfulnessRating(editingDream.meaningfulness_rating ?? null);
       setSelectedTags(editingDream.tags);
       setSelectedArchetypeIds(dreamArchetypeMap[editingDream.id] ?? []);
       setWakingLifeContext(editingDream.waking_life_context || '');
@@ -341,6 +393,7 @@ export function DreamEditor() {
       setIsLucid(false);
       setMoodRating(null);
       setClarityRating(null);
+      setMeaningfulnessRating(null);
       setAnalysisNotes('');
 
       // If a queue item is waiting, pre-fill from it
@@ -382,6 +435,25 @@ export function DreamEditor() {
     }
   }, [editorOpen]);
 
+  // Auto-backup content while editing an existing dream (in case of crashes)
+  const saveEditBackup = useCallback(() => {
+    if (!editorOpen || !editingDreamId || !editor) return;
+    try {
+      localStorage.setItem(getEditBackupKey(editingDreamId), JSON.stringify({
+        contentHtml: editor.getHTML(),
+        title,
+        analysisNotes,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch { /* ignore */ }
+  }, [editorOpen, editingDreamId, editor, title, analysisNotes]);
+
+  useEffect(() => {
+    if (!editorOpen || !editingDreamId) return;
+    const id = setTimeout(saveEditBackup, 2000);
+    return () => clearTimeout(id);
+  }, [saveEditBackup, editorOpen, editingDreamId]);
+
   // Auto-save draft to localStorage for new dreams (debounced via state)
   const saveDraft = useCallback(() => {
     if (!editorOpen || editingDreamId || !editor) return;
@@ -392,6 +464,7 @@ export function DreamEditor() {
         isLucid,
         moodRating,
         clarityRating,
+        meaningfulnessRating,
         selectedTagIds: selectedTags.map((t) => t.id),
         wakingLifeContext,
         contentHtml: editor.getHTML(),
@@ -401,7 +474,7 @@ export function DreamEditor() {
     } catch {
       // ignore storage errors
     }
-  }, [editorOpen, editingDreamId, editor, title, dreamDate, isLucid, moodRating, clarityRating, selectedTags, wakingLifeContext]);
+  }, [editorOpen, editingDreamId, editor, title, dreamDate, isLucid, moodRating, clarityRating, meaningfulnessRating, selectedTags, wakingLifeContext]);
 
   useEffect(() => {
     if (!editorOpen || editingDreamId) return;
@@ -493,6 +566,7 @@ export function DreamEditor() {
       setIsLucid(draft.isLucid || false);
       setMoodRating(draft.moodRating ?? null);
       setClarityRating(draft.clarityRating ?? null);
+      setMeaningfulnessRating(draft.meaningfulnessRating ?? null);
       setWakingLifeContext(draft.wakingLifeContext || '');
       editor.commands.setContent(draft.contentHtml || '');
       // Restore tags by ID
@@ -532,11 +606,13 @@ export function DreamEditor() {
           is_lucid: isLucid,
           mood_rating: moodRating,
           clarity_rating: clarityRating,
+          meaningfulness_rating: meaningfulnessRating,
           waking_life_context: wakingLifeContext.trim() || null,
           analysis_notes: analysisNotes.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
         });
+        try { localStorage.removeItem(getEditBackupKey(editingDreamId)); } catch { /* ignore */ }
       } else {
         // Derive waking_life_context: if a client is selected in professional mode,
         // prefix with client tag; otherwise use the raw textarea value.
@@ -555,6 +631,7 @@ export function DreamEditor() {
           is_lucid: isLucid,
           mood_rating: moodRating,
           clarity_rating: clarityRating,
+          meaningfulness_rating: meaningfulnessRating,
           waking_life_context: effectiveContext,
           analysis_notes: analysisNotes.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
@@ -595,34 +672,40 @@ export function DreamEditor() {
    * O(doc_size × avg_terms_per_tag) instead of O(tags × doc_size).
    */
   const applyAutoHighlights = (tagsToHighlight: Tag[]) => {
-    if (!editor || tagsToHighlight.length === 0) return;
+    if (!editor || (editor as Editor & { isDestroyed?: boolean }).isDestroyed || tagsToHighlight.length === 0) return;
     const markType = editor.schema.marks[TAG_HIGHLIGHT];
-    const { tr } = editor.state;
+    if (!markType) return;
     // Build search-term → tag map for efficient per-node lookup
     const termMap = new Map<string, Tag>();
     tagsToHighlight.forEach((tag) => {
       [tag.name, ...tag.aliases].forEach((s) => termMap.set(s.toLowerCase(), tag));
     });
-    editor.state.doc.descendants((node, pos) => {
-      if (!node.isText || !node.text) return;
-      const lower = node.text.toLowerCase();
-      termMap.forEach((tag, term) => {
-        let idx = lower.indexOf(term);
-        while (idx !== -1) {
-          tr.addMark(
-            pos + idx,
-            pos + idx + term.length,
-            markType.create({ tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }], source: 'auto' }),
-          );
-          idx = lower.indexOf(term, idx + 1);
-        }
-      });
-    });
-    // Keep auto-highlights outside the undo stack so Ctrl+Z doesn't undo
-    // a highlight instead of the user's last typed character.
-    tr.setMeta('addToHistory', false);
-    editor.view.dispatch(tr);
-    editor.commands.focus();
+    // Use chain().command() so the transaction goes through TipTap's full
+    // reconciliation layer, preventing React/ProseMirror state de-sync.
+    editor.chain()
+      .command(({ tr, state }) => {
+        let changed = false;
+        state.doc.descendants((node, pos) => {
+          if (!node.isText || !node.text) return;
+          const lower = node.text.toLowerCase();
+          termMap.forEach((tag, term) => {
+            let idx = lower.indexOf(term);
+            while (idx !== -1) {
+              tr.addMark(
+                pos + idx,
+                pos + idx + term.length,
+                markType.create({ tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }], source: 'auto' }),
+              );
+              changed = true;
+              idx = lower.indexOf(term, idx + 1);
+            }
+          });
+        });
+        // Keep auto-highlights outside undo stack so Ctrl+Z undoes typed text.
+        tr.setMeta('addToHistory', false);
+        return changed;
+      })
+      .run();
   };
 
   const handleAutoMatchTags = () => {
@@ -700,6 +783,80 @@ export function DreamEditor() {
       setAnalysisError(String(e));
     } finally {
       setIsAnalysing(false);
+    }
+  };
+
+  /**
+   * AI Tag — asks Claude to identify which words/phrases in the dream correspond
+   * to tags, then applies inline highlights for each match.
+   * This is separate from AI Analyse (which provides theme notes).
+   */
+  const handleAITagging = async () => {
+    if (!editor) return;
+    const dreamText = editor.getText().trim();
+    if (!dreamText) return;
+    const apiKey = localStorage.getItem('anthropic_api_key') ?? '';
+    if (!apiKey.trim()) {
+      setAnalysisError('No API key found. Add your Anthropic API key in Settings.');
+      return;
+    }
+    setIsAITagging(true);
+    setAnalysisError(null);
+    try {
+      const tagsJson = JSON.stringify(allTags.map((t) => ({ id: t.id, name: t.name, aliases: t.aliases, category: t.category })));
+      const result = await aiTagDream(dreamText, tagsJson, apiKey);
+      // result.inline_tags: Array<{ text: string; tag_name: string }>
+      const lowerIndex = new Map(allTags.map((t) => [t.name.toLowerCase(), t]));
+      const matchedTagIds = new Set<string>();
+      const tagsToHighlight: Tag[] = [];
+      // Build per-phrase highlight entries
+      const phraseTagPairs: Array<{ phrase: string; tag: Tag }> = [];
+      result.inline_tags.forEach(({ text: phrase, tag_name }) => {
+        const tag = lowerIndex.get(tag_name.toLowerCase());
+        if (!tag) return;
+        matchedTagIds.add(tag.id);
+        phraseTagPairs.push({ phrase, tag });
+        if (!tagsToHighlight.some((t) => t.id === tag.id)) tagsToHighlight.push(tag);
+      });
+      // Apply marks for each phrase exactly
+      if (phraseTagPairs.length > 0 && !editor.isDestroyed) {
+        const markType = editor.schema.marks[TAG_HIGHLIGHT];
+        if (markType) {
+          editor.chain()
+            .command(({ tr, state }) => {
+              let changed = false;
+              phraseTagPairs.forEach(({ phrase, tag }) => {
+                const lower = phrase.toLowerCase();
+                state.doc.descendants((node, pos) => {
+                  if (!node.isText || !node.text) return;
+                  const nodeLower = node.text.toLowerCase();
+                  let idx = nodeLower.indexOf(lower);
+                  while (idx !== -1) {
+                    tr.addMark(
+                      pos + idx,
+                      pos + idx + phrase.length,
+                      markType.create({ tags: [{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }], source: 'auto' }),
+                    );
+                    changed = true;
+                    idx = nodeLower.indexOf(lower, idx + 1);
+                  }
+                });
+              });
+              tr.setMeta('addToHistory', false);
+              return changed;
+            })
+            .run();
+        }
+      }
+      // Add matched tags to selectedTags
+      const newTags = tagsToHighlight.filter((t) => !selectedTags.some((s) => s.id === t.id));
+      if (newTags.length > 0) {
+        handleTagsChange([...selectedTags, ...newTags]);
+      }
+    } catch (e) {
+      setAnalysisError(String(e));
+    } finally {
+      setIsAITagging(false);
     }
   };
 
@@ -872,7 +1029,7 @@ export function DreamEditor() {
                 Auto-match
               </Button>
             </div>
-            <TagPicker selectedTags={selectedTags} onTagsChange={handleTagsChange} />
+            <TagPicker selectedTags={selectedTags} onTagsChange={handleTagsChange} currentDreamId={editingDreamId} />
           </div>
 
           {/* Client selector (professional mode, new dreams only) */}
@@ -1030,11 +1187,23 @@ export function DreamEditor() {
                   size="sm"
                   className="h-8 gap-1.5 text-xs"
                   onClick={handleAIAnalysis}
-                  disabled={isAnalysing}
+                  disabled={isAnalysing || isAITagging}
                   title="Analyse dream with AI: suggests tags and theme notes"
                 >
                   <Brain className="h-3.5 w-3.5" />
                   {isAnalysing ? 'Analysing…' : 'AI Analyse'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={handleAITagging}
+                  disabled={isAITagging || isAnalysing}
+                  title="AI Tag: apply inline highlights for matched tags. Use [[tag_name]] to tag manually."
+                >
+                  <Tags className="h-3.5 w-3.5" />
+                  {isAITagging ? 'Tagging…' : 'AI Tag'}
                 </Button>
               </div>
               {analysisError && (
@@ -1104,8 +1273,8 @@ export function DreamEditor() {
             </div>
           </div>
 
-          {/* Mood and Clarity sliders */}
-          <div className="grid grid-cols-2 gap-6">
+          {/* Mood, Clarity and Meaningfulness sliders */}
+          <div className="grid grid-cols-3 gap-6">
             <div className="space-y-3">
               <div className="flex justify-between">
                 <Label>Mood</Label>
@@ -1136,18 +1305,42 @@ export function DreamEditor() {
                 step={1}
               />
             </div>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <Label>Meaningfulness</Label>
+                <span className="text-sm text-muted-foreground">
+                  {meaningfulnessRating !== null ? meaningfulnessRating : '-'}
+                </span>
+              </div>
+              <Slider
+                value={meaningfulnessRating !== null ? [meaningfulnessRating] : [5]}
+                onValueChange={(v) => setMeaningfulnessRating(v[0])}
+                min={1}
+                max={10}
+                step={1}
+              />
+            </div>
           </div>
 
-          {/* Analysis Notes */}
+          {/* Analysis Notes — auto-expanding to fit content */}
           <div className="space-y-2">
             <Label htmlFor="analysis-notes">Analysis Notes</Label>
             <Textarea
               id="analysis-notes"
               placeholder="Patterns, symbols, interpretations, recurring themes…"
               value={analysisNotes}
-              onChange={(e) => setAnalysisNotes(e.target.value)}
-              className="resize-none"
-              rows={3}
+              onChange={(e) => {
+                setAnalysisNotes(e.target.value);
+                const el = e.currentTarget;
+                el.style.height = 'auto';
+                el.style.height = `${el.scrollHeight}px`;
+              }}
+              onFocus={(e) => {
+                const el = e.currentTarget;
+                el.style.height = 'auto';
+                el.style.height = `${el.scrollHeight}px`;
+              }}
+              className="resize-none overflow-hidden min-h-[80px]"
             />
           </div>
         </div>

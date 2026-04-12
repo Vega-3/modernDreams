@@ -11,6 +11,7 @@ export interface Dream {
   is_lucid: boolean;
   mood_rating: number | null;
   clarity_rating: number | null;
+  meaningfulness_rating?: number | null;
   waking_life_context?: string | null;
   analysis_notes?: string | null;
   tags: Tag[];
@@ -36,6 +37,8 @@ export interface WordTagAssociation {
    *  lives in.  Used by the graph builder to weight same-paragraph co-occurrences
    *  more strongly than dream-level co-occurrences. */
   paragraph_index: number;
+  /** 'manual' = user selected the text; 'auto' = auto-match or AI Tag applied it. */
+  source?: 'manual' | 'auto';
 }
 
 export interface TagWordUsage {
@@ -43,6 +46,7 @@ export interface TagWordUsage {
   dream_title: string;
   dream_date: string;
   word: string;
+  source?: 'manual' | 'auto';
 }
 
 export interface CreateDreamInput {
@@ -53,6 +57,7 @@ export interface CreateDreamInput {
   is_lucid: boolean;
   mood_rating: number | null;
   clarity_rating: number | null;
+  meaningfulness_rating?: number | null;
   waking_life_context?: string | null;
   analysis_notes?: string | null;
   tag_ids: string[];
@@ -159,6 +164,32 @@ export const analyzeDream = (
     availableTags,
     apiKey,
   });
+
+// ── AI inline tag detection ────────────────────────────────────────────────────
+
+export interface InlineTagEntry {
+  text: string;
+  tag_name: string;
+}
+
+export interface InlineTagResult {
+  inline_tags: InlineTagEntry[];
+}
+
+export const aiTagDream = (
+  dreamText: string,
+  availableTags: string,
+  apiKey: string,
+) =>
+  invoke<InlineTagResult>('ai_tag_dream', {
+    dreamText,
+    availableTags,
+    apiKey,
+  });
+
+// ── Word tag association management ───────────────────────────────────────────
+export const deleteWordTagAssociation = (dreamId: string, tagId: string, word: string) =>
+  invoke<void>('delete_word_tag_association', { dreamId, tagId, word });
 
 // ── Graph theory analysis ─────────────────────────────────────────────────────
 
