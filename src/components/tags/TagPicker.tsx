@@ -15,6 +15,8 @@ import type { Tag, TagCategory, Dream } from '@/lib/tauri';
 interface TagPickerProps {
   selectedTags: Tag[];
   onTagsChange: (tags: Tag[]) => void;
+  /** When provided, this dream ID is excluded from the "apply to existing dreams?" dialog. */
+  currentDreamId?: string | null;
 }
 
 const categories: { id: TagCategory; label: string }[] = [
@@ -25,7 +27,7 @@ const categories: { id: TagCategory; label: string }[] = [
   { id: 'custom', label: 'Custom' },
 ];
 
-export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
+export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [newTagCategory, setNewTagCategory] = useState<TagCategory>('custom');
@@ -90,7 +92,11 @@ export function TagPicker({ selectedTags, onTagsChange }: TagPickerProps) {
         await fetchDreams();
         currentDreams = useDreamStore.getState().dreams;
       }
-      const matches = findMatchingDreams(newTag, currentDreams);
+      // Exclude the dream currently open in the editor — the tag was just added
+      // to it in memory, so prompting to apply it again is redundant.
+      const matches = findMatchingDreams(newTag, currentDreams).filter(
+        (d) => d.id !== currentDreamId,
+      );
       if (matches.length > 0) {
         setMatchingDreams(matches);
         setPendingTag(newTag);
