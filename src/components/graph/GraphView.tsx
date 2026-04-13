@@ -1,7 +1,9 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
-import cytoscape, { Core, ElementDefinition } from 'cytoscape';
-import fcose from 'cytoscape-fcose';
-import { ZoomIn, ZoomOut, Maximize2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import ForceGraph3D from '3d-force-graph';
+import type { NodeObject, LinkObject } from '3d-force-graph';
+import * as THREE from 'three';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { Eye, EyeOff, Maximize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,8 +12,6 @@ import { useTagStore } from '@/stores/tagStore';
 import { useUIStore } from '@/stores/uiStore';
 import { getCategoryColor } from '@/lib/utils';
 import { GraphStats } from './GraphStats';
-
-cytoscape.use(fcose);
 
 // ── Group definitions ────────────────────────────────────────────────────────
 
@@ -36,16 +36,7 @@ const GROUP_COLORS: Record<GroupKey, string> = {
   custom: '#f59e0b',
 };
 
-// ── Physics defaults ─────────────────────────────────────────────────────────
-
-const DEFAULT_REPEL    = 5000;   // Coulomb-like repulsion between every node pair
-const DEFAULT_LINK_STR = 0.06;  // Spring constant
-const LINK_DISTANCE    = 100;   // Spring rest length in pixels
-const CENTER_GRAVITY   = 0.008; // Attraction towards canvas centre
-const DAMPING          = 0.82;  // Velocity damping per frame (0 = stop, 1 = no friction)
-const STOP_THRESHOLD   = 0.08;  // Max velocity below which simulation stops
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -57,111 +48,135 @@ function oneYearAgo(): string {
   return d.toISOString().slice(0, 10);
 }
 
+// ── Data types ───────────────────────────────────────────────────────────────
+
+interface GNode extends NodeObject {
+  id: string;
+  name: string;
+  nodeType: 'tag' | 'dream';
+  category?: GroupKey;
+  color: string;
+  /** Radius for the sphere, in graph units */
+  size: number;
+  /** Original dream id (for dream nodes only) */
+  dreamId?: string;
+}
+
+interface GLink extends LinkObject<GNode> {
+  linkType: 'dream-tag' | 'tag-tag';
+  /** Co-occurrence count for tag-tag edges, 1 for dream-tag */
+  weight: number;
+}
+
+// Glow sprite texture (radial gradient, created once)
+let _glowTexture: THREE.Texture | null = null;
+function getGlowTexture(): THREE.Texture {
+  if (_glowTexture) return _glowTexture;
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.3, 'rgba(255,255,255,0.6)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  _glowTexture = new THREE.CanvasTexture(canvas);
+  return _glowTexture;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function GraphView() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const cyRef        = useRef<Core | null>(null);
-
-  // Physics param refs — read by the animation tick each frame without
-  // needing to recreate the Cytoscape instance when sliders change.
-  const repelRef      = useRef(DEFAULT_REPEL);
-  const linkStrRef    = useRef(DEFAULT_LINK_STR);
-  // Exposed so the slider sync effect can re-excite a settled simulation.
-  const startSimRef   = useRef<(() => void) | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const graphRef = useRef<any>(null);
+  const openEditorRef = useRef<(id: string) => void>(() => {});
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { dreams, fetchDreams } = useDreamStore();
-  const { tags, fetchTags }     = useTagStore();
-  const { openEditor }          = useUIStore();
+  const { tags, fetchTags } = useTagStore();
+  const { openEditor } = useUIStore();
+
+  // Keep openEditor in a ref so the init effect doesn't re-run on identity change
+  useEffect(() => { openEditorRef.current = openEditor; }, [openEditor]);
 
   const [hiddenGroups, setHiddenGroups] = useState<Set<GroupKey>>(new Set());
-  const [, setSelectedNode]             = useState<string | null>(null);
-  const [startDate, setStartDate]       = useState<string>(oneYearAgo());
-  const [endDate, setEndDate]           = useState<string>(today());
-  const [repelStrength, setRepelStrength] = useState(DEFAULT_REPEL);
-  const [linkStrength, setLinkStrength]   = useState(DEFAULT_LINK_STR);
+  const [startDate, setStartDate] = useState(oneYearAgo());
+  const [endDate, setEndDate] = useState(today());
+  // Defaults chosen so the 3-D force mapping produces reasonable initial layouts:
+  // repelStrength 20000 → d3 charge ≈ -60; linkStrength 0.001 → link dist ≈ 130
+  const [repelStrength, setRepelStrength] = useState(20000);
+  const [linkStrength, setLinkStrength] = useState(0.001);
 
   useEffect(() => {
     fetchDreams();
     fetchTags();
   }, [fetchDreams, fetchTags]);
 
-  // Sync physics slider state → refs and re-excite a settled simulation.
-  useEffect(() => {
-    repelRef.current   = repelStrength;
-    linkStrRef.current = linkStrength;
-    startSimRef.current?.();
-  }, [repelStrength, linkStrength]);
-
-  // ── Toggle a visibility group ──────────────────────────────────────────────
   const toggleGroup = (group: GroupKey) => {
     setHiddenGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(group)) next.delete(group);
-      else next.add(group);
+      if (next.has(group)) next.delete(group); else next.add(group);
       return next;
     });
   };
 
-  // ── Build cytoscape elements from store data ───────────────────────────────
-  const elements = useMemo(() => {
-    const nodes: ElementDefinition[] = [];
-    const edges: ElementDefinition[] = [];
-    const tagCoOccurrence: Map<string, Map<string, number>> = new Map();
+  // ── Build graph data ───────────────────────────────────────────────────────
+  const graphData = useMemo<{ nodes: GNode[]; links: GLink[] }>(() => {
+    const nodes: GNode[] = [];
+    const links: GLink[] = [];
+    const tagCoOccurrence = new Map<string, Map<string, number>>();
 
     const showDreams    = !hiddenGroups.has('dreams');
-    const visibleCatSet = new Set(
-      ALL_GROUPS.filter((g) => g !== 'dreams' && !hiddenGroups.has(g))
-    );
+    const visibleCatSet = new Set(ALL_GROUPS.filter(g => g !== 'dreams' && !hiddenGroups.has(g)));
 
-    // Tag nodes
+    // Tag nodes — size proportional to usage_count
     tags
-      .filter((t) => visibleCatSet.has(t.category as GroupKey))
-      .forEach((tag) => {
+      .filter(t => visibleCatSet.has(t.category as GroupKey))
+      .forEach(tag => {
         nodes.push({
-          data: {
-            id: `tag-${tag.id}`,
-            label: tag.name,
-            type: 'tag',
-            category: tag.category,
-            color: getCategoryColor(tag.category),
-            size: Math.max(20, Math.min(50, tag.usage_count * 5 + 20)),
-          },
+          id: `tag-${tag.id}`,
+          name: tag.name,
+          nodeType: 'tag',
+          category: tag.category as GroupKey,
+          color: getCategoryColor(tag.category),
+          size: Math.max(3, Math.min(14, tag.usage_count * 1.8 + 3)),
         });
       });
 
-    // Always compute co-occurrence from all dreams so that tag-tag edges
-    // are preserved even when dream nodes are hidden. Dream node/edge
-    // creation is still gated by showDreams.
-    dreams.forEach((dream) => {
-      const dreamTags = dream.tags.filter((t) =>
-        visibleCatSet.has(t.category as GroupKey)
-      );
+    // Filter dreams to selected date range
+    const filteredDreams = dreams.filter(d => {
+      const date = d.dream_date.slice(0, 10);
+      return date >= startDate && date <= endDate;
+    });
+
+    filteredDreams.forEach(dream => {
+      const dreamTags = dream.tags.filter(t => visibleCatSet.has(t.category as GroupKey));
 
       if (showDreams) {
         nodes.push({
-          data: {
-            id: `dream-${dream.id}`,
-            label: dream.title,
-            type: 'dream',
-            color: '#6b7280',
-            size: 15,
-          },
+          id: `dream-${dream.id}`,
+          name: dream.title,
+          nodeType: 'dream',
+          color: GROUP_COLORS.dreams,
+          size: 2.5,
+          dreamId: dream.id,
         });
 
-        dreamTags.forEach((tag) => {
-          edges.push({
-            data: {
-              id: `edge-${dream.id}-${tag.id}`,
-              source: `dream-${dream.id}`,
-              target: `tag-${tag.id}`,
-              type: 'dream-tag',
-            },
-          });
+        dreamTags.forEach(tag => {
+          links.push({
+            source: `dream-${dream.id}`,
+            target: `tag-${tag.id}`,
+            linkType: 'dream-tag',
+            weight: 1,
+          } as GLink);
         });
       }
 
-      // Co-occurrence always computed regardless of dream visibility
+      // Co-occurrence (computed even when dream nodes are hidden)
       for (let i = 0; i < dreamTags.length; i++) {
         for (let j = i + 1; j < dreamTags.length; j++) {
           const a = dreamTags[i].id;
@@ -174,15 +189,7 @@ export function GraphView() {
       }
     });
 
-    // Tag-tag co-occurrence edges.
-    // Trigger: dreams are hidden vs. visible.
-    // Why: When dreams are visible, they serve as intermediate nodes — a direct tag→tag
-    //      edge would duplicate the relationship already represented by the dream node.
-    //      When dreams are hidden we must perform an edge contraction of every degree-1
-    //      dream vertex, so all tags that shared a dream need a direct edge regardless
-    //      of how many dreams they co-occurred in.
-    // Outcome: threshold is 2 with dreams visible (only recurring pairs), 1 when hidden
-    //          (full contraction — every tag pair that ever shared a dream is connected).
+    // Tag–tag co-occurrence edges
     const coEdgeThreshold = showDreams ? 2 : 1;
     const addedEdges = new Set<string>();
     tagCoOccurrence.forEach((coTags, tagId) => {
@@ -190,260 +197,164 @@ export function GraphView() {
         const edgeKey = [tagId, coTagId].sort().join('-');
         if (!addedEdges.has(edgeKey) && count >= coEdgeThreshold) {
           addedEdges.add(edgeKey);
-          edges.push({
-            data: {
-              id: `coedge-${edgeKey}`,
-              source: `tag-${tagId}`,
-              target: `tag-${coTagId}`,
-              type: 'tag-tag',
-              weight: count,
-            },
-          });
+          links.push({
+            source: `tag-${tagId}`,
+            target: `tag-${coTagId}`,
+            linkType: 'tag-tag',
+            weight: count,
+          } as GLink);
         }
       });
     });
 
-    return [...nodes, ...edges];
-  }, [dreams, tags, hiddenGroups]);
+    return { nodes, links };
+  }, [dreams, tags, hiddenGroups, startDate, endDate]);
 
-  // ── Cytoscape + physics simulation ────────────────────────────────────────
+  // ── Initialise the 3D graph (once) ────────────────────────────────────────
   useEffect(() => {
-    if (!containerRef.current || elements.length === 0) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    // ── Physics state (local to this effect instance) ────────────────────
-    let animFrameId: number | null = null;
-    const velocities = new Map<string, { vx: number; vy: number }>();
-    let simRunning = false;
+    const w = Math.max(container.offsetWidth, 400);
+    const h = Math.max(container.offsetHeight, 400);
 
-    const stopSim = () => {
-      simRunning = false;
-      if (animFrameId !== null) {
-        cancelAnimationFrame(animFrameId);
-        animFrameId = null;
-      }
-    };
-
-    const startSim = (instance: Core) => {
-      stopSim();
-      simRunning = true;
-
-      // Seed velocities with a small random jitter so nodes start moving
-      instance.nodes().forEach((n) => {
-        if (!velocities.has(n.id())) {
-          velocities.set(n.id(), {
-            vx: (Math.random() - 0.5) * 3,
-            vy: (Math.random() - 0.5) * 3,
-          });
-        }
-      });
-
-      const tick = () => {
-        if (!simRunning) return;
-
-        const nodes = instance.nodes();
-        if (nodes.length === 0) { simRunning = false; return; }
-
-        const cw = containerRef.current?.offsetWidth  ?? 800;
-        const ch = containerRef.current?.offsetHeight ?? 600;
-        const cx = cw / 2;
-        const cy = ch / 2;
-
-        // Read current physics params from refs (updated by sliders without
-        // needing to recreate the Cytoscape instance).
-        const repelStrength = repelRef.current;
-        const linkStrength  = linkStrRef.current;
-
-        // Accumulate forces for each node
-        const forces = new Map<string, { fx: number; fy: number }>();
-        nodes.forEach((n) => { forces.set(n.id(), { fx: 0, fy: 0 }); });
-
-        const nodeArr = nodes.toArray();
-
-        // Repel force: every pair of nodes pushes apart (Coulomb-like)
-        for (let i = 0; i < nodeArr.length; i++) {
-          for (let j = i + 1; j < nodeArr.length; j++) {
-            const n1 = nodeArr[i];
-            const n2 = nodeArr[j];
-            const p1 = n1.position();
-            const p2 = n2.position();
-            const dx = p2.x - p1.x;
-            const dy = p2.y - p1.y;
-            const d2 = Math.max(dx * dx + dy * dy, 1);
-            const d  = Math.sqrt(d2);
-            const f  = repelStrength / d2;
-            const fx = (f * dx) / d;
-            const fy = (f * dy) / d;
-            forces.get(n1.id())!.fx -= fx;
-            forces.get(n1.id())!.fy -= fy;
-            forces.get(n2.id())!.fx += fx;
-            forces.get(n2.id())!.fy += fy;
+    const graph = new ForceGraph3D(container, { rendererConfig: { antialias: true, alpha: true } })
+      .width(w)
+      .height(h)
+      .backgroundColor('#08080f')
+      .showNavInfo(false)
+      // Node appearance
+      .nodeId('id')
+      .nodeLabel('name')
+      .nodeVal((node: NodeObject) => { const n = node as GNode; return n.size * n.size; })
+      .nodeColor((node: NodeObject) => (node as GNode).color)
+      .nodeOpacity(0.92)
+      .nodeResolution(12)
+      // Custom node rendering — glow sprite so bloom looks great
+      .nodeThreeObject((node: NodeObject) => {
+        const n = node as GNode;
+        const spriteMat = new THREE.SpriteMaterial({
+          map: getGlowTexture(),
+          color: new THREE.Color(n.color),
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const sprite = new THREE.Sprite(spriteMat);
+        const scale = n.size * 3.5;
+        sprite.scale.set(scale, scale, 1);
+        return sprite;
+      })
+      .nodeThreeObjectExtend(true)   // also render default sphere behind the sprite
+      // Link appearance
+      .linkSource('source')
+      .linkTarget('target')
+      .linkColor((link: LinkObject) => {
+        const l = link as GLink;
+        return l.linkType === 'tag-tag' ? '#aaaacc' : '#555577';
+      })
+      .linkOpacity(0.5)
+      .linkWidth((link: LinkObject) => {
+        const l = link as GLink;
+        return l.linkType === 'tag-tag' ? Math.min(l.weight * 0.7, 3.5) : 0.4;
+      })
+      .linkDirectionalParticles(0)
+      // Interactions
+      .onNodeClick((node: NodeObject, _event: MouseEvent) => {
+        const n = node as GNode;
+        if (n.nodeType === 'dream') {
+          // Double-click detection
+          if (clickTimerRef.current) {
+            clearTimeout(clickTimerRef.current);
+            clickTimerRef.current = null;
+            if (n.dreamId) openEditorRef.current(n.dreamId);
+            return;
           }
+          clickTimerRef.current = setTimeout(() => { clickTimerRef.current = null; }, 280);
         }
+        // Fly camera towards clicked node
+        const nx = (n as unknown as { x?: number }).x ?? 0;
+        const ny = (n as unknown as { y?: number }).y ?? 0;
+        const nz = (n as unknown as { z?: number }).z ?? 0;
+        const dist = 80;
+        const mag  = Math.hypot(nx, ny, nz) || 1;
+        const ratio = (mag + dist) / mag;
+        graph.cameraPosition(
+          { x: nx * ratio, y: ny * ratio, z: nz * ratio },
+          { x: nx, y: ny, z: nz },
+          800,
+        );
+      })
+      .onBackgroundClick(() => {
+        graph.zoomToFit(600, 60);
+      })
+      // Initial data
+      .graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
 
-        // Link (spring) force: connected nodes attract/repel towards rest length
-        instance.edges().forEach((edge) => {
-          const src = edge.source();
-          const tgt = edge.target();
-          const sf  = forces.get(src.id());
-          const tf  = forces.get(tgt.id());
-          if (!sf || !tf) return;
-          const p1 = src.position();
-          const p2 = tgt.position();
-          const dx = p2.x - p1.x;
-          const dy = p2.y - p1.y;
-          const d  = Math.sqrt(dx * dx + dy * dy) || 1;
-          const f  = linkStrength * (d - LINK_DISTANCE);
-          const fx = (f * dx) / d;
-          const fy = (f * dy) / d;
-          sf.fx += fx;
-          sf.fy += fy;
-          tf.fx -= fx;
-          tf.fy -= fy;
-        });
+    // Add bloom pass for the constellation glow effect
+    try {
+      const bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 1.2, 0.5, 0.1);
+      graph.postProcessingComposer().addPass(bloomPass);
+    } catch (e) {
+      console.warn('Bloom pass unavailable:', e);
+    }
 
-        // Integrate velocities and update positions
-        let maxVel = 0;
-        instance.startBatch();
-        nodes.forEach((node) => {
-          const vel   = velocities.get(node.id()) ?? { vx: 0, vy: 0 };
-          const force = forces.get(node.id())!;
-          const pos   = node.position();
+    graphRef.current = graph;
 
-          // Center gravity pulls nodes gently towards canvas centre
-          vel.vx += (cx - pos.x) * CENTER_GRAVITY + force.fx;
-          vel.vy += (cy - pos.y) * CENTER_GRAVITY + force.fy;
-
-          // Apply damping (friction)
-          vel.vx *= DAMPING;
-          vel.vy *= DAMPING;
-
-          maxVel = Math.max(maxVel, Math.abs(vel.vx) + Math.abs(vel.vy));
-          node.position({ x: pos.x + vel.vx, y: pos.y + vel.vy });
-          velocities.set(node.id(), vel);
-        });
-        instance.endBatch();
-
-        // Keep running until the system settles
-        if (simRunning && maxVel > STOP_THRESHOLD) {
-          animFrameId = requestAnimationFrame(tick);
-        } else {
-          simRunning = false;
-          animFrameId = null;
-        }
-      };
-
-      animFrameId = requestAnimationFrame(tick);
-    };
-
-    // ── Build cytoscape instance ──────────────────────────────────────────
-    const instance = cytoscape({
-      container: containerRef.current,
-      elements,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            label: 'data(label)',
-            'background-color': 'data(color)',
-            width: 'data(size)',
-            height: 'data(size)',
-            shape: 'ellipse',           // All nodes are circles
-            'text-valign': 'bottom',
-            'text-halign': 'center',
-            'font-size': '10px',
-            color: '#a0a0b0',
-            'text-margin-y': 5,
-          },
-        },
-        {
-          selector: 'node[type="dream"]',
-          style: { 'border-width': 2, 'border-color': '#3d0a0d' },
-        },
-        {
-          selector: 'node[type="tag"]',
-          style: { 'border-width': 2, 'border-color': 'data(color)' },
-        },
-        {
-          selector: 'edge[type="dream-tag"]',
-          style: { width: 1, 'line-color': '#ffffff', 'curve-style': 'bezier', opacity: 0.3 },
-        },
-        {
-          selector: 'edge[type="tag-tag"]',
-          style: {
-            width: 'mapData(weight, 2, 10, 2, 6)',
-            'line-color': '#ffffff',
-            'curve-style': 'bezier',
-            opacity: 0.65,
-          },
-        },
-        { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#de0615' } },
-        { selector: '.faded',        style: { opacity: 0.15 } },
-        { selector: '.highlighted',  style: { opacity: 1 } },
-      ],
-      layout: {
-        name: 'fcose',
-        animate: true,
-        animationDuration: 600,
-        nodeDimensionsIncludeLabels: true,
-        nodeRepulsion: () => 4500,
-        idealEdgeLength: () => LINK_DISTANCE,
-        edgeElasticity: () => 0.45,
-      } as any,
-    });
-
-    // Expose startSim so the slider sync effect can re-excite a settled sim.
-    startSimRef.current = () => startSim(instance);
-
-    // Start physics simulation after the initial layout settles
-    instance.on('layoutstop', () => startSim(instance));
-
-    // Re-excite the simulation whenever the user finishes dragging a node
-    instance.on('dragfree', 'node', () => startSim(instance));
-
-    instance.on('tap', 'node', (e) => {
-      const node = e.target;
-      instance.elements().addClass('faded');
-      node.addClass('highlighted');
-      node.neighborhood().addClass('highlighted');
-      setSelectedNode(node.id());
-      if (node.data('type') === 'dream' && e.originalEvent.detail === 2) {
-        openEditor(node.id().replace('dream-', ''));
+    // Resize observer
+    const observer = new ResizeObserver(() => {
+      if (graphRef.current && container) {
+        graphRef.current
+          .width(container.offsetWidth)
+          .height(container.offsetHeight);
       }
     });
+    observer.observe(container);
 
-    instance.on('tap', (e) => {
-      if (e.target === instance) {
-        instance.elements().removeClass('faded highlighted');
-        setSelectedNode(null);
-      }
-    });
-
-    cyRef.current = instance;
     return () => {
-      stopSim();
-      startSimRef.current = null;
-      instance.destroy();
+      observer.disconnect();
+      if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
+      try { graph._destructor(); } catch { /* ignore */ }
+      container.innerHTML = '';
+      graphRef.current = null;
     };
-  }, [elements, openEditor]);
+  // Only recreate the graph if the container changes (openEditor is in a ref)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── Zoom / reset controls ─────────────────────────────────────────────────
-  const handleZoomIn  = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.2);
-  const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() / 1.2);
-  const handleFit     = () => cyRef.current?.fit(undefined, 50);
-  const handleReset   = () => {
-    cyRef.current?.elements().removeClass('faded highlighted');
-    cyRef.current?.fit(undefined, 50);
-    setSelectedNode(null);
+  // ── Reactively update graph data ──────────────────────────────────────────
+  useEffect(() => {
+    if (!graphRef.current) return;
+    graphRef.current.graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
+  }, [graphData]);
+
+  // ── Map physics slider values to 3D force params ──────────────────────────
+  useEffect(() => {
+    if (!graphRef.current) return;
+    // repelStrength: [5000, 40000] → charge strength [-15, -120]
+    const charge = -Math.max(15, repelStrength / 333);
+    // linkStrength: [0.00005, 0.005] → link distance [150, 30]
+    const linkDist = Math.max(30, 150 - linkStrength * 20000);
+    graphRef.current.d3Force('charge')?.strength(charge);
+    graphRef.current.d3Force('link')?.distance(linkDist);
+    graphRef.current.d3ReheatSimulation();
+  }, [repelStrength, linkStrength]);
+
+  // ── Camera controls ────────────────────────────────────────────────────────
+  const handleFit    = () => graphRef.current?.zoomToFit(600, 60);
+  const handleReset  = () => {
+    graphRef.current?.zoomToFit(600, 60);
+    graphRef.current?.cameraPosition({ x: 0, y: 0, z: 400 }, { x: 0, y: 0, z: 0 }, 800);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
 
-      {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      {/* ── Top bar ───────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
 
-        {/* Node-group toggles — click to collapse/show each group */}
+        {/* Node-group toggles */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {ALL_GROUPS.map((group) => {
             const hidden = hiddenGroups.has(group);
@@ -471,7 +382,7 @@ export function GraphView() {
           })}
         </div>
 
-        {/* Analysis date range */}
+        {/* Date range */}
         <div className="flex items-center gap-2">
           <Label htmlFor="graph-start" className="text-xs text-muted-foreground whitespace-nowrap">
             From
@@ -497,28 +408,23 @@ export function GraphView() {
           />
         </div>
 
-        {/* Zoom controls */}
+        {/* Zoom/reset controls */}
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handleZoomIn}>
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" onClick={handleZoomOut}>
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" onClick={handleFit}>
+          <Button variant="outline" size="icon" onClick={handleFit} title="Fit view">
             <Maximize2 className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={handleReset}>
+          <Button variant="outline" size="icon" onClick={handleReset} title="Reset camera">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* ── Graph canvas + collapsible stats panel ───────────────────────── */}
+      {/* ── 3D canvas + stats panel ────────────────────────────────────────── */}
       <div className="flex-1 flex gap-3 min-h-0">
         <div
           ref={containerRef}
-          className="flex-1 rounded-lg border bg-card cytoscape-container min-h-0"
+          className="flex-1 rounded-lg border overflow-hidden min-h-0"
+          style={{ background: '#08080f' }}
         />
         <GraphStats
           startDate={startDate}
