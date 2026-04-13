@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Upload, Image, X, FileText, Loader2 } from 'lucide-react';
 import { transcribeHandwritingClaude } from '@/lib/tauri';
+import { friendlyApiError } from '@/lib/apiError';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -290,7 +291,7 @@ export function HandwritingUpload({ open, onClose, onImagesProcessed }: Handwrit
                 .map((img) => (
                   <p key={img.id}>
                     <span className="font-medium">{img.file.name}:</span>{' '}
-                    {img.error ?? 'Unknown error'}
+                    {friendlyApiError(img.error ?? 'Unknown error')}
                   </p>
                 ))}
             </div>

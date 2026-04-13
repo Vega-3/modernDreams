@@ -14,7 +14,7 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   meaningfulness_rating, waking_life_context
+                   waking_life_context, analysis_notes, meaningfulness_rating
             FROM dreams
             ORDER BY dream_date DESC, created_at DESC
             "#,
@@ -34,8 +34,9 @@ pub fn get_dreams(db: State<'_, DbConnection>) -> Result<Vec<Dream>, String> {
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
-                meaningfulness_rating: row.get(10)?,
-                waking_life_context: row.get(11)?,
+                meaningfulness_rating: row.get(12)?,
+                waking_life_context: row.get(10)?,
+                analysis_notes: row.get(11)?,
                 tags: Vec::new(),
             })
         })
@@ -60,7 +61,7 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   meaningfulness_rating, waking_life_context
+                   waking_life_context, analysis_notes, meaningfulness_rating
             FROM dreams
             WHERE id = ?1
             "#,
@@ -80,8 +81,9 @@ pub fn get_dream(id: String, db: State<'_, DbConnection>) -> Result<Option<Dream
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
-                meaningfulness_rating: row.get(10)?,
-                waking_life_context: row.get(11)?,
+                meaningfulness_rating: row.get(12)?,
+                waking_life_context: row.get(10)?,
+                analysis_notes: row.get(11)?,
                 tags: Vec::new(),
             })
         })
@@ -111,8 +113,8 @@ pub fn create_dream(
         r#"
         INSERT INTO dreams (id, title, content_html, content_plain, dream_date,
                            created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                           meaningfulness_rating, waking_life_context)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                           waking_life_context, analysis_notes, meaningfulness_rating)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
         "#,
         params![
             id,
@@ -127,6 +129,8 @@ pub fn create_dream(
             input.clarity_rating,
             input.meaningfulness_rating,
             input.waking_life_context,
+            input.analysis_notes,
+            input.meaningfulness_rating,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -144,8 +148,8 @@ pub fn create_dream(
     for assoc in &input.word_tag_associations {
         let assoc_id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word) VALUES (?1, ?2, ?3, ?4)",
-            params![assoc_id, id, assoc.tag_id, assoc.word],
+            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word, paragraph_index, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![assoc_id, id, assoc.tag_id, assoc.word, assoc.paragraph_index, assoc.source],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -165,6 +169,7 @@ pub fn create_dream(
         clarity_rating: input.clarity_rating,
         meaningfulness_rating: input.meaningfulness_rating,
         waking_life_context: input.waking_life_context,
+        analysis_notes: input.analysis_notes,
         tags,
     })
 }
@@ -183,7 +188,7 @@ pub fn update_dream(
         UPDATE dreams
         SET title = ?2, content_html = ?3, content_plain = ?4, dream_date = ?5,
             updated_at = ?6, is_lucid = ?7, mood_rating = ?8, clarity_rating = ?9,
-            meaningfulness_rating = ?10, waking_life_context = ?11
+            waking_life_context = ?10, analysis_notes = ?11, meaningfulness_rating = ?12
         WHERE id = ?1
         "#,
         params![
@@ -198,6 +203,8 @@ pub fn update_dream(
             input.clarity_rating,
             input.meaningfulness_rating,
             input.waking_life_context,
+            input.analysis_notes,
+            input.meaningfulness_rating,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -227,8 +234,8 @@ pub fn update_dream(
     for assoc in &input.word_tag_associations {
         let assoc_id = Uuid::new_v4().to_string();
         conn.execute(
-            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word) VALUES (?1, ?2, ?3, ?4)",
-            params![assoc_id, input.id, assoc.tag_id, assoc.word],
+            "INSERT INTO word_tag_associations (id, dream_id, tag_id, word, paragraph_index, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![assoc_id, input.id, assoc.tag_id, assoc.word, assoc.paragraph_index, assoc.source],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -241,7 +248,7 @@ pub fn update_dream(
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
-                   meaningfulness_rating, waking_life_context
+                   waking_life_context, analysis_notes, meaningfulness_rating
             FROM dreams
             WHERE id = ?1
             "#,
@@ -261,8 +268,9 @@ pub fn update_dream(
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
-                meaningfulness_rating: row.get(10)?,
-                waking_life_context: row.get(11)?,
+                meaningfulness_rating: row.get(12)?,
+                waking_life_context: row.get(10)?,
+                analysis_notes: row.get(11)?,
                 tags,
             })
         })
@@ -307,7 +315,7 @@ fn get_dream_tags(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count, t.aliases
+            SELECT t.id, t.name, t.category, t.color, t.description, t.usage_count, t.aliases, t.emotive_subcategory
             FROM tags t
             JOIN dream_tags dt ON t.id = dt.tag_id
             WHERE dt.dream_id = ?1
@@ -328,6 +336,7 @@ fn get_dream_tags(
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
                 aliases: serde_json::from_str(&aliases_str).unwrap_or_default(),
+                emotive_subcategory: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;

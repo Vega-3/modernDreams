@@ -15,7 +15,8 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             is_lucid BOOLEAN DEFAULT FALSE,
             mood_rating INTEGER,
             clarity_rating INTEGER,
-            waking_life_context TEXT
+            waking_life_context TEXT,
+            analysis_notes TEXT
         );
 
         CREATE TABLE IF NOT EXISTS tags (
@@ -25,7 +26,8 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
             color TEXT NOT NULL DEFAULT '#6366f1',
             description TEXT,
             usage_count INTEGER DEFAULT 0,
-            aliases TEXT NOT NULL DEFAULT '[]'
+            aliases TEXT NOT NULL DEFAULT '[]',
+            emotive_subcategory TEXT
         );
 
         CREATE TABLE IF NOT EXISTS dream_tags (
@@ -105,13 +107,21 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         [],
     );
 
-    // Additive migration: add meaningfulness_rating column to existing databases.
+  
+
+    // Additive migration: add analysis_notes column to existing databases.
     let _ = conn.execute(
-        "ALTER TABLE dreams ADD COLUMN meaningfulness_rating INTEGER",
+        "ALTER TABLE dreams ADD COLUMN analysis_notes TEXT",
         [],
     );
 
-    // Additive migration: tag notes for the Theme Analysis page.
+    // Additive migration: add emotive_subcategory column to tags.
+    let _ = conn.execute(
+        "ALTER TABLE tags ADD COLUMN emotive_subcategory TEXT",
+        [],
+    );
+
+  // Additive migration: tag notes for the Theme Analysis page.
     // Using CREATE TABLE IF NOT EXISTS so it is safe to run on every startup.
     conn.execute_batch(
         r#"
@@ -122,6 +132,24 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         );
         "#,
     )?;
+
+    // Additive migration: paragraph_index on word_tag_associations.
+    let _ = conn.execute(
+        "ALTER TABLE word_tag_associations ADD COLUMN paragraph_index INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+
+    // Additive migration: meaningfulness_rating on dreams.
+    let _ = conn.execute(
+        "ALTER TABLE dreams ADD COLUMN meaningfulness_rating INTEGER",
+        [],
+    );
+
+    // Additive migration: source column on word_tag_associations (manual vs auto).
+    let _ = conn.execute(
+        "ALTER TABLE word_tag_associations ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'",
+        [],
+    );
 
     Ok(())
 }

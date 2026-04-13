@@ -19,7 +19,11 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Dream Journal**: Rich text editor for recording dreams with tags
 - **Tag System**: 5 categories (Location, Person, Symbolic, Emotive, Custom)
 - **Calendar View**: View dreams by date with month/week views
-- **Graph View**: Network visualization of dream-tag relationships
+- **Graph View**: Network visualization of dream-tag relationships with edge contraction (hiding dreams directly connects co-occurring tags)
+- **Paragraph-weighted graph edges**: Tags manually highlighted in the same paragraph of a dream generate a stronger graph connection (+1 weight bonus per shared paragraph) than tags that merely co-occur in the same dream entry
+- **Inline tag removal**: Hover over any tagged text in the editor to reveal a small coloured X button in the corner — click to remove that tag from just that word or phrase without affecting the tag elsewhere in the dream
+- **Draft auto-save**: The dream editor auto-saves a draft to localStorage while you write; if the app closes unexpectedly, a restore banner offers to recover your content on the next open
+- **Theme Analysis**: Cross-tag pattern analysis with custom notes per tag
 - **Full-text Search**: Quick search across all dreams (Ctrl+K)
 - **Obsidian Export**: Export to Obsidian vault with wikilinks and Dataview support
 - **Handwriting Scan**: Import handwritten dream notes using a two-stage Claude AI pipeline — raw transcription followed by English translation, with auto tag matching
@@ -27,6 +31,36 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Auto-match Tags**: Scans the dream text and automatically applies any tags whose name appears in the content
 - **Inline Images**: Attach and embed images directly into dream entries via the toolbar
 - **Guide**: A built-in guide page that loads `public/GUIDE.md` — edit that file to document your own journalling workflow
+- **Jungian Archetypes Reference**: A comprehensive reference document (`public/ARCHETYPES.md`) covering all 12 Jungian archetypes with dream indicators, shadow forms, and professional resources — viewable from the Guide page
+- **Analyst Mode**: Multi-client dream management for professional analysts — manage client profiles, bulk-import dreams from text files, and filter the journal by client
+- **Visual Customization**: Switch themes, change fonts, inject custom CSS, set a custom background image, and batch-update tag colours via palette upload — all from Settings → Appearance
+- **Constellation View**: The Tag Analysis page now displays co-occurring tags as a concentric constellation (Cytoscape.js) — the most closely associated tags orbit toward the centre, replacing the flat force-directed graph (#22)
+- **Jungian Archetypes Tracker**: A new Archetypes page seeds 12 archetypes from `public/ARCHETYPES.md`, lets you link tags to each archetype, and shows dream-level activity per archetype; archetypes can also be assigned per dream in the editor (#23)
+- **Guide binder redesign**: The Guide page renders as a multi-tab binder — the Archetypes reference and the journalling guide are selectable pages with prev/next navigation (#24)
+- **Dream Series**: A new Dream Series page groups related dreams into named series with a horizontal timeline, symbolic tag evolution grid, and Jaccard-based auto-suggestions for series membership (#25)
+- **Professional mode**: Analyst Mode renamed to Professional Mode across the entire UI; the bulk import flow now opens each file sequentially in the dream editor with a progress indicator, replacing the old one-shot batch import (#26)
+- **AI Dream Analysis**: An "AI Analyse" toolbar button in the dream editor calls Claude Haiku to suggest relevant tags from your tag library and generate Jungian theme notes, auto-applying matched tags and appending the analysis to the Analysis Notes field (#27)
+- **Inline X tag removal fix**: Pressing the coloured X overlay on any in-text tagged span now correctly removes the tag from that specific chunk of text (#20)
+- **Archetype improvements**: Link-tag panel in Archetypes page is always visible with a live search input; archetypes now appear in the dream editor bubble menu so any selected text can be linked to an archetype exactly like tags (#23)
+- **Sleep & REM guide page**: A new "Sleep & REM" tab in the Guide binder covers sleep architecture, REM cycle timing, dream recall techniques, and MILD — the most evidence-based method for lucid dreaming (#24)
+- **Dream Series enhancements**: Tag overlap grid now includes all tag categories (not just symbolic); dream search in the add-dream panel filters by title or tag name; occurrence display redesigned as compact coloured count badges (#25)
+- **Professional mode separation**: Personal and professional dream views are now strictly separated — switching the toggle hides the other mode's entries without deleting them; client colour palette expanded from 8 to 16 options; All Clients button widened and styled more prominently (#26)
+- **AI analysis full pipeline**: AI Analyse now also runs auto-match and applies in-text highlights for all newly suggested tags; new-tag suggestion threshold in the prompt is lowered to encourage richer tagging (#27)
+- **Clarity theme**: High-contrast greyscale theme designed for accessibility — 1.125rem base font, wide line-height, thick borders, serif font default (#28)
+- **Neon Noir theme**: Modern high-contrast dark theme with cyan primary and magenta secondary accents, sharp 0.25rem corners, monospace font (#28)
+- **Context-aware spell checker**: Grammar fix now suppresses capitalisation after abbreviations (Dr., Mr., etc.), correctly handles "wont to" vs "won't", and adds common typo corrections (recieve→receive, wierd→weird, teh→the, etc.) (#29)
+- **Characters tag tab**: The "People" tag category is renamed "Characters" and moved to the last position in the tag category tabs (#30)
+- **Spell-checker improvements**: Grammar fix now preserves the Jungian "Id" term, removes the over-aggressive "ur"→"your" substitution, and hoists regex arrays to module scope for faster repeated calls (#8)
+- **Bubble menu efficiency**: Active-tag lookup in the editor bubble menu is now computed once per render instead of once per tag/archetype button (#8)
+- **BubbleMenu render optimisation**: Sorted tag list memoized on tag change; active-tag mark extraction moved to component scope, removing IIFE anti-pattern from JSX (#8)
+- **sortByName utility**: Shared generic sort helper extracted to `src/lib/utils.ts` and used across DreamEditor, ThemeAnalysisPage, and HandwritingPreview in place of repeated inline spread-sort patterns (#8)
+- **Single-pass word-tag deduplication**: `extractWordTagAssociations` now deduplicates inline during document traversal instead of a second filter pass; fixes missing `paragraph_index` in handwriting preview associations (#8)
+- **activeTags memoization**: Mark lookup for the bubble menu is wrapped in `useMemo` keyed on editor state so it skips recomputation on unrelated React re-renders (e.g. mouse-hover updates) (#8)
+- **Atomic import-queue advance**: `advanceImportQueue` store action now uses the updater-function form of Zustand `set` to eliminate the read/write race between `get()` and `set()` (#8)
+- **TAG_HIGHLIGHT constant**: Mark name extracted to a shared constant in `TagHighlightExtension.ts` and used throughout DreamEditor and HandwritingPreview, eliminating stringly-typed `'tagHighlight'` literals (#8)
+- **Auto-highlight undo safety**: Auto-applied tag highlights are now excluded from the undo stack (`addToHistory: false`) and focus is restored to the editor after applying, so Ctrl+Z correctly undoes the user's last typed character rather than a highlight (#8)
+- **Parallel dream save**: `handleSaveAll` in the handwriting preview now saves all recognised dreams concurrently with `Promise.all` instead of sequentially, reducing total save time by N× (#8)
+- **updateCurrentForm state safety**: Functional state updater in HandwritingPreview now reads from the previous state argument instead of a render-closure snapshot, eliminating a stale-closure race when React batches updates (#8)
 
 ## Prerequisites
 
@@ -70,9 +104,10 @@ dreams/
 │   │   ├── tags/        # Picker, Badge
 │   │   ├── calendar/    # FullCalendar wrapper
 │   │   ├── graph/       # Cytoscape wrapper
-│   │   └── search/      # Search dialog
+│   │   ├── search/      # Search dialog
+│   │   └── ThemeProvider.tsx  # Runtime theme/font/CSS injection
 │   ├── pages/           # Page components
-│   ├── stores/          # Zustand stores
+│   ├── stores/          # Zustand stores (incl. themeStore)
 │   ├── hooks/           # Custom hooks
 │   └── lib/             # Utilities
 │
@@ -107,12 +142,23 @@ The key is stored in browser localStorage and is sent only to Anthropic's API en
 
 ## Guide
 
-The **Guide** page (sidebar → Guide) displays `public/GUIDE.md`. Edit that file with your own notes on:
+The **Guide** page (sidebar → Guide) displays `public/GUIDE.md`.
 
-- How to record dreams effectively
-- Your personal tagging conventions
-- Tips for using the handwriting scanner
-- Any other workflow notes
+## Graph View
+
+The Graph page visualises dream–tag relationships as a force-directed network. Use the group
+toggles (top-left) to show or hide Dreams, or any of the five tag categories.
+
+### Edge contraction when hiding dreams
+
+When the **Dreams** group is hidden, the view performs an *edge contraction* on all dream
+nodes: any two tags that appeared together in at least one dream are connected directly. This
+matches the expected graph-theory behaviour (contracting degree-1 vertices) described in the
+original design.
+
+With dreams visible, direct tag–tag edges are only drawn when two tags co-occur in **2 or
+more** dreams (to avoid clutter). With dreams hidden, all co-occurrences (≥ 1 shared dream)
+produce a direct edge.
 
 ## Graph Theory Analysis
 
@@ -126,9 +172,11 @@ network analysis on the tag co-occurrence graph for any chosen date window.
 2. **Subgraph construction** — All dreams in the window are fetched along with their tags,
    forming a bipartite dream–tag graph.
 3. **Vertex contraction** — Every dream node is contracted: for each pair of tags that
-   share a dream, an edge is added (or its weight incremented by 1). The result is a
-   **weighted undirected tag co-occurrence network** represented as an adjacency matrix
-   `W[i][j]` = number of shared dreams.
+   share a dream, an edge is added (or its weight incremented by 1). Tags that are
+   manually highlighted in the **same paragraph** via the word-level tagging feature
+   receive an additional +1 bonus per shared paragraph, so frequently co-occurring
+   paragraph-level pairs surface more prominently in the graph statistics. The result
+   is a **weighted undirected tag co-occurrence network** `W[i][j]`.
 4. **Python analysis** — The adjacency matrix is passed to `src-python/graph_analysis.py`,
    which computes four families of statistics and returns the top 5 for each.
 
@@ -156,6 +204,24 @@ src-tauri/resources/
 └── graph_analysis.py   # Compiled into the binary via include_str!
 ```
 
+## Professional Mode
+
+The **Professional** page (sidebar → Professional) provides tools for professionals managing multiple clients' dream journals.
+
+### Features
+
+- **Mode toggle**: Switch between Personal and Professional mode at any time.
+- **Client management**: Add and remove named clients, each with a colour identifier.
+- **Bulk import**: Select one or more `.txt` files per client to import as dream entries. Each file becomes one dream; if the first line is a `YYYY-MM-DD` date it is used as the dream date, otherwise today's date is applied.
+- **Client filter**: When clients exist, a filter button appears in the header (left of the search button). Select a client to show only their dreams in the Journal; click the × badge to return to the full view.
+
+### How client tagging works
+
+Imported dreams are tagged by prepending `[Client: Name]` to the dream's Waking Life Context field. This means:
+- Client attribution persists in the database without schema changes.
+- Hand-edited dreams can be manually attributed to a client by adding the same prefix.
+- The search dialog can find client-specific dreams by searching for `[Client: Name]`.
+
 ## Keyboard Shortcuts
 
 - `Ctrl+K` - Open search dialog
@@ -169,10 +235,7 @@ The SQLite database is stored in the app data directory:
 
 ## Obsidian Export
 
-Dreams can be exported to an Obsidian vault at:
-```
-C:\Users\globo\Desktop\Dreams\vault\
-```
+Dreams can be exported to an Obsidian vault. The target path is configured in the Rust backend and is displayed in **Settings → Obsidian Export**.
 
 The export creates:
 - Dream files organized by year/month
@@ -180,6 +243,62 @@ The export creates:
 - YAML frontmatter with metadata
 - Wikilinks for navigation
 - Dataview queries for related dreams
+
+## Visual Customization
+
+The **Settings → Appearance** section provides a full suite of visual controls that apply immediately without restarting:
+
+### Themes
+
+Four built-in themes, each carrying its own default font, icon stroke-width, font-size scale, and background:
+
+| Theme | Description | Default Font | Icons |
+|---|---|---|---|
+| **Mementos** (default) | Persona 5 maximalist — deep blacks, vivid red, angular cards, sharp uppercase typography | System UI | 2.5px stroke |
+| **Base Theme** | Clean minimal dark — indigo accent colour, rounded corners, soft radial gradient background | Humanist | 1.75px stroke |
+| **Clarity** | High-contrast greyscale — near-white background, large text (1.125 rem), wide line-height; designed for accessibility | Serif | 2px stroke |
+| **Neon Noir** | High-contrast dark — near-black background, cyan/magenta accents, sharp corners | Monospace | 1.5px stroke |
+
+Switching themes overrides CSS custom properties and design-system rules via a runtime `<style>` tag. Selecting Mementos removes the override, restoring `globals.css` as the source of truth.
+
+### Background Image
+
+Enter any image URL in the **Background Image** field to replace the journal page background with a custom image (covers and centres automatically). Leave the field empty to use the active theme's default background.
+
+### Fonts
+
+Four font families: **System UI**, **Humanist** (Seravek / Gill Sans Nova), **Serif** (Georgia), and **Monospace** (Courier New). The selected font overrides the theme's default for the entire interface.
+
+### Custom CSS
+
+Paste any CSS into the textarea or upload a `.css` file as a template. Changes apply after a 400 ms debounce and are injected after all theme styles, so custom rules override everything. Clear the field to remove custom styles.
+
+### Tag Colour Palettes
+
+Upload a JSON file to batch-assign colours to tags:
+
+```json
+{
+  "Flying": "#a855f7",
+  "Ocean":  "#3b82f6",
+  "Chase":  "#f43f5e"
+}
+```
+
+Keys are matched against tag names (falling back to tag IDs). Matched tags are updated in the database; unmatched keys are silently ignored.
+
+## Jungian Archetypes Reference
+
+`public/ARCHETYPES.md` is a built-in reference document covering the **12 primary Jungian archetypes** — viewable from the Guide page (sidebar → Guide).
+
+## Planned Features (from Issue #19)
+
+Three new features proposed for future development (see [issue #19](https://github.com/Vega-3/modernDreams/issues/19)):
+
+1. **Complex Constellation Map** — Concentric tag graph centred on a chosen figure, showing the full psychic constellation of associates by co-occurrence frequency
+2. **Dream Series Arc** — Timeline view for a named series of dreams, showing symbolic tag evolution and emotional arc across entries, with analyst annotation
+3. **Projection Audit** — Data-grounded portrait for Person tags: aggregates manually-associated words, co-occurring emotive tags, and analyst notes
+
 
 ## License
 

@@ -12,7 +12,8 @@ export interface Dream {
   mood_rating: number | null;
   clarity_rating: number | null;
   meaningfulness_rating: number | null;
-  waking_life_context?: string | null;
+  waking_life_context: string | null;
+  analysis_notes: string | null;
   tags: Tag[];
 }
 
@@ -24,6 +25,7 @@ export interface Tag {
   description: string | null;
   usage_count: number;
   aliases: string[];
+  emotive_subcategory?: string | null;
 }
 
 export type TagCategory = 'location' | 'person' | 'symbolic' | 'emotive' | 'custom';
@@ -31,6 +33,12 @@ export type TagCategory = 'location' | 'person' | 'symbolic' | 'emotive' | 'cust
 export interface WordTagAssociation {
   tag_id: string;
   word: string;
+  /** 0-based index of the block (paragraph / heading / list item) the word
+   *  lives in.  Used by the graph builder to weight same-paragraph co-occurrences
+   *  more strongly than dream-level co-occurrences. */
+  paragraph_index: number;
+  /** 'manual' = user selected the text; 'auto' = auto-match or AI Tag applied it. */
+  source?: 'manual' | 'auto';
 }
 
 export interface TagWordUsage {
@@ -38,6 +46,7 @@ export interface TagWordUsage {
   dream_title: string;
   dream_date: string;
   word: string;
+  source?: 'manual' | 'auto';
 }
 
 export interface CreateDreamInput {
@@ -49,7 +58,8 @@ export interface CreateDreamInput {
   mood_rating: number | null;
   clarity_rating: number | null;
   meaningfulness_rating: number | null;
-  waking_life_context?: string | null;
+  waking_life_context: string | null;
+  analysis_notes: string | null;
   tag_ids: string[];
   word_tag_associations: WordTagAssociation[];
 }
@@ -64,6 +74,7 @@ export interface CreateTagInput {
   color: string;
   description: string | null;
   aliases: string[];
+  emotive_subcategory?: string | null;
 }
 
 export interface UpdateTagInput extends CreateTagInput {
@@ -136,6 +147,49 @@ export const transcribeHandwritingClaude = (
     imageMediaType,
     apiKey,
   });
+
+// Claude AI dream analysis
+export interface DreamAnalysisResult {
+  suggested_tag_names: string[];
+  theme_suggestions: string;
+}
+
+export const analyzeDream = (
+  dreamText: string,
+  availableTags: string,
+  apiKey: string,
+) =>
+  invoke<DreamAnalysisResult>('analyze_dream', {
+    dreamText,
+    availableTags,
+    apiKey,
+  });
+
+// ── AI inline tag detection ────────────────────────────────────────────────────
+
+export interface InlineTagEntry {
+  text: string;
+  tag_name: string;
+}
+
+export interface InlineTagResult {
+  inline_tags: InlineTagEntry[];
+}
+
+export const aiTagDream = (
+  dreamText: string,
+  availableTags: string,
+  apiKey: string,
+) =>
+  invoke<InlineTagResult>('ai_tag_dream', {
+    dreamText,
+    availableTags,
+    apiKey,
+  });
+
+// ── Word tag association management ───────────────────────────────────────────
+export const deleteWordTagAssociation = (dreamId: string, tagId: string, word: string) =>
+  invoke<void>('delete_word_tag_association', { dreamId, tagId, word });
 
 // ── Graph theory analysis ─────────────────────────────────────────────────────
 

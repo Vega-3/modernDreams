@@ -1,11 +1,20 @@
 import { create } from 'zustand';
 
-type View = 'dashboard' | 'journal' | 'calendar' | 'graph' | 'tags' | 'theme' | 'settings' | 'guide';
+type View = 'dashboard' | 'journal' | 'calendar' | 'graph' | 'tags' | 'theme' | 'archetypes' | 'series' | 'analyst' | 'settings' | 'guide';
 
 interface RecognizedDream {
   rawTranscript: string;
   englishTranscript: string;
   imagePreview: string;
+}
+
+export interface ImportQueueItem {
+  title: string;
+  contentHtml: string;
+  contentPlain: string;
+  date: string;
+  clientId: string;
+  clientName: string;
 }
 
 interface UIState {
@@ -17,6 +26,10 @@ interface UIState {
   handwritingUploadOpen: boolean;
   handwritingPreviewOpen: boolean;
   recognizedDreams: RecognizedDream[];
+
+  // Bulk-import queue (professional mode)
+  importQueue: ImportQueueItem[];
+  importQueueIndex: number;
 
   // Actions
   setView: (view: View) => void;
@@ -30,6 +43,11 @@ interface UIState {
   setRecognizedDreams: (dreams: RecognizedDream[]) => void;
   openHandwritingPreview: () => void;
   closeHandwritingPreview: () => void;
+
+  // Queue actions
+  startImportQueue: (items: ImportQueueItem[]) => void;
+  advanceImportQueue: () => void;
+  clearImportQueue: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -41,6 +59,8 @@ export const useUIStore = create<UIState>((set) => ({
   handwritingUploadOpen: false,
   handwritingPreviewOpen: false,
   recognizedDreams: [],
+  importQueue: [],
+  importQueueIndex: 0,
 
   setView: (view) => set({ currentView: view }),
 
@@ -59,4 +79,17 @@ export const useUIStore = create<UIState>((set) => ({
 
   openHandwritingPreview: () => set({ handwritingPreviewOpen: true }),
   closeHandwritingPreview: () => set({ handwritingPreviewOpen: false, recognizedDreams: [] }),
+
+  startImportQueue: (items) => set({ importQueue: items, importQueueIndex: 0, editorOpen: items.length > 0 }),
+
+  advanceImportQueue: () =>
+    set((state) => {
+      const next = state.importQueueIndex + 1;
+      if (next < state.importQueue.length) {
+        return { importQueueIndex: next, editorOpen: true };
+      }
+      return { importQueue: [], importQueueIndex: 0, editorOpen: false };
+    }),
+
+  clearImportQueue: () => set({ importQueue: [], importQueueIndex: 0 }),
 }));

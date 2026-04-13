@@ -23,7 +23,7 @@ pub fn get_tags(db: State<'_, DbConnection>) -> Result<Vec<Tag>, String> {
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, name, category, color, description, usage_count, aliases
+            SELECT id, name, category, color, description, usage_count, aliases, emotive_subcategory
             FROM tags
             ORDER BY usage_count DESC, name ASC
             "#,
@@ -42,6 +42,7 @@ pub fn get_tags(db: State<'_, DbConnection>) -> Result<Vec<Tag>, String> {
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
                 aliases: parse_aliases(&aliases_str),
+                emotive_subcategory: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -61,7 +62,7 @@ pub fn get_tag(id: String, db: State<'_, DbConnection>) -> Result<Option<Tag>, S
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, name, category, color, description, usage_count, aliases
+            SELECT id, name, category, color, description, usage_count, aliases, emotive_subcategory
             FROM tags
             WHERE id = ?1
             "#,
@@ -80,6 +81,7 @@ pub fn get_tag(id: String, db: State<'_, DbConnection>) -> Result<Option<Tag>, S
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
                 aliases: parse_aliases(&aliases_str),
+                emotive_subcategory: row.get(7)?,
             })
         })
         .optional()
@@ -97,8 +99,8 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbConnection>) -> Result<
 
     conn.execute(
         r#"
-        INSERT INTO tags (id, name, category, color, description, usage_count, aliases)
-        VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)
+        INSERT INTO tags (id, name, category, color, description, usage_count, aliases, emotive_subcategory)
+        VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)
         "#,
         params![
             id,
@@ -107,6 +109,7 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbConnection>) -> Result<
             input.color,
             input.description,
             aliases_json,
+            input.emotive_subcategory,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -119,6 +122,7 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbConnection>) -> Result<
         description: input.description,
         usage_count: 0,
         aliases: input.aliases,
+        emotive_subcategory: input.emotive_subcategory,
     })
 }
 
@@ -131,7 +135,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
     conn.execute(
         r#"
         UPDATE tags
-        SET name = ?2, category = ?3, color = ?4, description = ?5, aliases = ?6
+        SET name = ?2, category = ?3, color = ?4, description = ?5, aliases = ?6, emotive_subcategory = ?7
         WHERE id = ?1
         "#,
         params![
@@ -141,6 +145,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
             input.color,
             input.description,
             aliases_json,
+            input.emotive_subcategory,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -149,7 +154,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, name, category, color, description, usage_count, aliases
+            SELECT id, name, category, color, description, usage_count, aliases, emotive_subcategory
             FROM tags
             WHERE id = ?1
             "#,
@@ -168,6 +173,7 @@ pub fn update_tag(input: UpdateTagInput, db: State<'_, DbConnection>) -> Result<
                 description: row.get(4)?,
                 usage_count: row.get(5)?,
                 aliases: parse_aliases(&aliases_str),
+                emotive_subcategory: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -195,7 +201,7 @@ pub fn get_tag_word_associations(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT wta.word, d.id, d.title, d.dream_date
+            SELECT wta.word, d.id, d.title, d.dream_date, wta.source
             FROM word_tag_associations wta
             JOIN dreams d ON d.id = wta.dream_id
             WHERE wta.tag_id = ?1
@@ -211,6 +217,7 @@ pub fn get_tag_word_associations(
                 dream_id: row.get(1)?,
                 dream_title: row.get(2)?,
                 dream_date: row.get(3)?,
+                source: row.get(4).ok(),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -221,4 +228,21 @@ pub fn get_tag_word_associations(
     }
 
     Ok(result)
+}
+
+/// Delete a single word-tag association (removes a learned association entry).
+#[tauri::command]
+pub fn delete_word_tag_association(
+    dream_id: String,
+    tag_id: String,
+    word: String,
+    db: State<'_, DbConnection>,
+) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM word_tag_associations WHERE dream_id = ?1 AND tag_id = ?2 AND word = ?3",
+        params![dream_id, tag_id, word],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }

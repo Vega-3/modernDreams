@@ -37,6 +37,8 @@
     "@tiptap/pm": "^2.1.13",
     "@tiptap/react": "^2.1.13",
     "@tiptap/starter-kit": "^2.1.13",
+    "@types/three": "^0.183.1",
+    "3d-force-graph": "^1.80.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cytoscape": "^3.28.1",
@@ -53,6 +55,7 @@
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^5.0.4",
+    "three": "^0.183.2",
     "uuid": "^9.0.1",
     "zustand": "^4.5.0"
   },

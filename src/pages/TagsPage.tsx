@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Hash } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Hash, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,21 +18,21 @@ import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
 import { findMatchingDreams } from '@/lib/tagUtils';
-import { getTagWordAssociations } from '@/lib/tauri';
+import { getTagWordAssociations, deleteWordTagAssociation } from '@/lib/tauri';
 import type { Tag, TagCategory, TagWordUsage, Dream } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
   { id: 'location', label: 'Locations' },
-  { id: 'person', label: 'People' },
   { id: 'symbolic', label: 'Symbolic' },
   { id: 'emotive', label: 'Emotive' },
   { id: 'custom', label: 'Custom' },
+  { id: 'person', label: 'Characters' },
 ];
 
 const presetColors = [
   '#22c55e', '#3b82f6', '#a855f7', '#f43f5e', '#f59e0b',
   '#14b8a6', '#ec4899', '#8b5cf6', '#f97316', '#06b6d4',
-  '#84cc16', '#6366f1', '#d946ef', '#ef4444', '#eab308',
+  '#84cc16', '#de0615', '#d946ef', '#ef4444', '#eab308',
   '#10b981',
 ];
 
@@ -43,16 +43,24 @@ function parseAliasesInput(raw: string): string[] {
     .filter(Boolean);
 }
 
+const EMOTIVE_SUBCATEGORIES = [
+  { id: 'positive', label: 'Positive', color: '#eab308' },
+  { id: 'neutral', label: 'Neutral', color: '#f97316' },
+  { id: 'negative', label: 'Negative', color: '#f43f5e' },
+] as const;
+
 export function TagsPage() {
   const { tags, fetchTags, createTag, updateTag, deleteTag } = useTagStore();
   const { dreams, fetchDreams } = useDreamStore();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<TagCategory>('location');
+  const [activeEmotiveSubcategory, setActiveEmotiveSubcategory] = useState<string>('positive');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<TagCategory>('custom');
-  const [color, setColor] = useState('#6366f1');
+  const [emotiveSubcategory, setEmotiveSubcategory] = useState<string | null>(null);
+  const [color, setColor] = useState('#de0615');
   const [description, setDescription] = useState('');
   const [aliases, setAliases] = useState('');
   const [wordAssociations, setWordAssociations] = useState<TagWordUsage[]>([]);
@@ -68,6 +76,7 @@ export function TagsPage() {
 
   const filteredTags = tags.filter((tag) => {
     if (tag.category !== activeCategory) return false;
+    if (activeCategory === 'emotive' && (tag.emotive_subcategory ?? 'negative') !== activeEmotiveSubcategory) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -81,6 +90,7 @@ export function TagsPage() {
       setEditingTag(tag);
       setName(tag.name);
       setCategory(tag.category);
+      setEmotiveSubcategory(tag.emotive_subcategory ?? null);
       setColor(tag.color);
       setDescription(tag.description || '');
       setAliases(tag.aliases.join(', '));
@@ -97,7 +107,9 @@ export function TagsPage() {
       setEditingTag(null);
       setName('');
       setCategory(activeCategory);
-      setColor(getCategoryColor(activeCategory));
+      const initSubcat = activeCategory === 'emotive' ? activeEmotiveSubcategory : null;
+      setEmotiveSubcategory(initSubcat);
+      setColor(getCategoryColor(activeCategory, initSubcat));
       setDescription('');
       setAliases('');
       setWordAssociations([]);
@@ -127,6 +139,7 @@ export function TagsPage() {
           color,
           description: description.trim() || null,
           aliases: parsedAliases,
+          emotive_subcategory: category === 'emotive' ? emotiveSubcategory : null,
         });
         setIsEditorOpen(false);
 
@@ -150,6 +163,7 @@ export function TagsPage() {
           color,
           description: description.trim() || null,
           aliases: parsedAliases,
+          emotive_subcategory: category === 'emotive' ? emotiveSubcategory : null,
         });
         setIsEditorOpen(false);
       }
@@ -195,6 +209,26 @@ export function TagsPage() {
 
         {categories.map((cat) => (
           <TabsContent key={cat.id} value={cat.id} className="mt-4">
+            {/* Emotive sub-tabs */}
+            {cat.id === 'emotive' && (
+              <div className="flex gap-2 mb-4">
+                {EMOTIVE_SUBCATEGORIES.map((sub) => (
+                  <button
+                    key={sub.id}
+                    onClick={() => setActiveEmotiveSubcategory(sub.id)}
+                    className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+                    style={{
+                      backgroundColor: activeEmotiveSubcategory === sub.id ? sub.color + '33' : 'transparent',
+                      borderColor: sub.color,
+                      color: sub.color,
+                      fontWeight: activeEmotiveSubcategory === sub.id ? 700 : 400,
+                    }}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {filteredTags.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
@@ -299,7 +333,9 @@ export function TagsPage() {
                     size="sm"
                     onClick={() => {
                       setCategory(cat.id);
-                      setColor(getCategoryColor(cat.id));
+                      const subcat = cat.id === 'emotive' ? (emotiveSubcategory ?? 'negative') : null;
+                      setEmotiveSubcategory(subcat);
+                      setColor(getCategoryColor(cat.id, subcat));
                     }}
                   >
                     {cat.label}
@@ -307,6 +343,34 @@ export function TagsPage() {
                 ))}
               </div>
             </div>
+
+            {/* Emotive subcategory */}
+            {category === 'emotive' && (
+              <div className="space-y-2">
+                <Label>Subcategory</Label>
+                <div className="flex gap-2">
+                  {EMOTIVE_SUBCATEGORIES.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setEmotiveSubcategory(sub.id);
+                        setColor(sub.color);
+                      }}
+                      className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+                      style={{
+                        backgroundColor: emotiveSubcategory === sub.id ? sub.color + '33' : 'transparent',
+                        borderColor: sub.color,
+                        color: sub.color,
+                        fontWeight: emotiveSubcategory === sub.id ? 700 : 400,
+                      }}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Color</Label>
@@ -351,35 +415,94 @@ export function TagsPage() {
             </div>
 
             {editingTag && (
-              <div className="space-y-2 border-t pt-4">
-                <Label>Associated words in dreams</Label>
+              <div className="space-y-3 border-t pt-4">
                 {loadingAssociations ? (
                   <p className="text-xs text-muted-foreground">Loading...</p>
-                ) : wordAssociations.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    No words tagged yet. Select text in the dream editor and click this tag to
-                    associate words.
-                  </p>
-                ) : (
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {wordAssociations.map((assoc, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <span
-                          className="font-medium px-1.5 py-0.5 rounded"
-                          style={{
-                            backgroundColor: editingTag.color + '26',
-                            color: editingTag.color,
-                          }}
-                        >
-                          {assoc.word}
-                        </span>
-                        <span className="text-muted-foreground truncate ml-2">
-                          {assoc.dream_title}
-                        </span>
+                ) : (() => {
+                  const manualAssocs = wordAssociations.filter(a => (a.source ?? 'manual') === 'manual');
+                  const autoAssocs = wordAssociations.filter(a => a.source === 'auto');
+                  return (
+                    <>
+                      {/* Manual associations */}
+                      <div className="space-y-1">
+                        <Label className="text-xs">Words tagged in dreams</Label>
+                        {manualAssocs.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            No words tagged yet. Select text in the dream editor and click this tag to associate words.
+                          </p>
+                        ) : (
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {manualAssocs.map((assoc, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs">
+                                <span
+                                  className="font-medium px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: editingTag.color + '26', color: editingTag.color }}
+                                >
+                                  {assoc.word}
+                                </span>
+                                <span className="text-muted-foreground truncate ml-2">{assoc.dream_title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
+
+                      {/* Learned associations (auto-sourced) */}
+                      {autoAssocs.length > 0 && (
+                        <div className="space-y-1 border-t pt-3">
+                          <Label className="text-xs">Learned associations (AI-tagged)</Label>
+                          <p className="text-[10px] text-muted-foreground mb-1">
+                            Promote a word to add it as an alias, or delete to remove the association.
+                          </p>
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {autoAssocs.map((assoc, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs gap-1">
+                                <span
+                                  className="font-medium px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: editingTag.color + '26', color: editingTag.color }}
+                                >
+                                  {assoc.word}
+                                </span>
+                                <span className="text-muted-foreground truncate flex-1 ml-1">{assoc.dream_title}</span>
+                                <button
+                                  type="button"
+                                  title="Promote to alias"
+                                  onClick={() => {
+                                    const word = assoc.word.toLowerCase();
+                                    const existing = aliases.split(',').map(s => s.trim()).filter(Boolean);
+                                    if (!existing.map(s => s.toLowerCase()).includes(word)) {
+                                      setAliases(existing.length > 0 ? existing.join(', ') + ', ' + word : word);
+                                    }
+                                  }}
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <ArrowUp className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Delete association"
+                                  onClick={async () => {
+                                    try {
+                                      await deleteWordTagAssociation(assoc.dream_id, editingTag.id, assoc.word);
+                                      setWordAssociations(prev =>
+                                        prev.filter(a => !(a.dream_id === assoc.dream_id && a.word === assoc.word && a.source === 'auto'))
+                                      );
+                                    } catch (e) {
+                                      console.error('Failed to delete association:', e);
+                                    }
+                                  }}
+                                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

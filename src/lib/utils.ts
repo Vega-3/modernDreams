@@ -22,12 +22,16 @@ export function formatDateShort(date: string | Date): string {
   });
 }
 
-export function getCategoryColor(category: string): string {
+export function getCategoryColor(category: string, emotiveSubcategory?: string | null): string {
+  if (category === 'emotive') {
+    if (emotiveSubcategory === 'positive') return '#eab308';
+    if (emotiveSubcategory === 'neutral') return '#f97316';
+    return '#f43f5e'; // negative or unset
+  }
   const colors: Record<string, string> = {
     location: '#22c55e',
     person: '#3b82f6',
     symbolic: '#a855f7',
-    emotive: '#f43f5e',
     custom: '#f59e0b',
   };
   return colors[category] || colors.custom;
@@ -36,4 +40,8 @@ export function getCategoryColor(category: string): string {
 export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength).trim() + '...';
+}
+
+export function sortByName<T extends { name: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.name.localeCompare(b.name));
 }

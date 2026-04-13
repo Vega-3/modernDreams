@@ -2,37 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Persona5';
+  src: url('/fonts/Persona5MenuFontPrototype-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 @layer base {
   :root {
-    --background: 240 10% 4%;
-    --foreground: 240 5% 92%;
+    /* ── Persona 5 palette: deep black + vivid red ──────────────────── */
+    --background: 252 5% 2%;
+    --foreground: 252 10% 95%;
 
-    --card: 240 10% 8%;
-    --card-foreground: 240 5% 92%;
+    --card: 252 5% 4%;
+    --card-foreground: 252 10% 95%;
 
-    --popover: 240 10% 10%;
-    --popover-foreground: 240 5% 92%;
+    --popover: 252 5% 6%;
+    --popover-foreground: 252 10% 95%;
 
-    --primary: 239 84% 67%;
+    /* #de0615 → hsl(356 95% 45%) */
+    --primary: 356 95% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 10% 14%;
-    --secondary-foreground: 240 5% 92%;
+    --secondary: 252 5% 8%;
+    --secondary-foreground: 252 10% 95%;
 
-    --muted: 240 10% 14%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 252 5% 8%;
+    --muted-foreground: 252 5% 55%;
 
-    --accent: 240 10% 18%;
-    --accent-foreground: 240 5% 92%;
+    --accent: 252 5% 11%;
+    --accent-foreground: 252 10% 95%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 10% 18%;
-    --input: 240 10% 18%;
-    --ring: 239 84% 67%;
+    --border: 356 55% 22%;
+    --input: 252 5% 8%;
+    --ring: 356 95% 45%;
 
-    --radius: 0.5rem;
+    /* Sharper corners for angular Persona 5 feel */
+    --radius: 0.25rem;
+
+    /* Accent line used in asymmetric card decorations */
+    --accent-line: hsl(356 95% 45%);
   }
 }
 
@@ -177,9 +190,150 @@
   font-weight: 600;
 }
 
+/* Journal page: Persona 5 radiating concentric rings */
+.journal-rings-bg {
+  /* Two ring systems from different off-centre origins — their interference
+     creates the slightly irregular, hand-drawn quality of the P5 spiral. */
+  background:
+    repeating-radial-gradient(
+      circle at 28% 30%,
+      transparent              0px,
+      transparent              52px,
+      rgba(222, 6, 21, 0.20)  52px,
+      rgba(222, 6, 21, 0.20)  80px
+    ),
+    repeating-radial-gradient(
+      circle at 74% 72%,
+      transparent              0px,
+      transparent              66px,
+      rgba(222, 6, 21, 0.08)  66px,
+      rgba(222, 6, 21, 0.08)  88px
+    );
+}
+
 /* Cytoscape container */
 .cytoscape-container {
   width: 100%;
   height: 100%;
   background: hsl(var(--background));
+}
+
+/* ── Persona 5 design system ─────────────────────────────────────────────── */
+
+/* Body font: slightly tighter tracking for a sharper read */
+body {
+  letter-spacing: -0.01em;
+}
+
+/* P5 font utility */
+.font-p5 {
+  font-family: 'Persona5', sans-serif;
+}
+
+/* Dream cards: white border, thick red left accent, sharp angular corners */
+.dream-card {
+  border-radius: 0 !important;
+  border: 3px solid rgba(255, 255, 255, 0.88) !important;
+  border-left-width: 5px !important;
+  border-left-color: hsl(var(--primary)) !important;
+  background: hsl(var(--card));
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  transition: border-color 0.15s, background 0.15s;
+}
+.dream-card:hover {
+  border-left-color: hsl(var(--primary) / 0.7) !important;
+  background: hsl(var(--accent));
+}
+
+/* Sidebar: bold left border on active nav items */
+.nav-item-active {
+  border-left: 3px solid hsl(var(--primary)) !important;
+  background: hsl(var(--accent)) !important;
+  font-weight: 700;
+}
+
+/* Header: angular right-edge accent slash */
+header {
+  position: relative;
+  overflow: hidden;
+}
+header::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--primary)),
+    hsl(356 80% 28%)
+  );
+}
+
+/* Section titles: uppercase with a coloured leading bar */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+}
+.section-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 1em;
+  background: hsl(var(--primary));
+  border-radius: 2px;
+}
+
+/* Dialog header: angular left-ruled accent */
+[role="dialog"] [data-radix-dialog-title],
+[role="dialog"] .dialog-title {
+  position: relative;
+  padding-left: 0.75rem;
+}
+[role="dialog"] [data-radix-dialog-title]::before,
+[role="dialog"] .dialog-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10%;
+  height: 80%;
+  width: 3px;
+  background: hsl(var(--primary));
+  border-radius: 2px;
+}
+
+/* Tag badges: more angular */
+.tag-badge {
+  border-radius: 2px;
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Primary button: angular with a thick top border accent */
+button[data-variant="default"],
+.btn-primary {
+  border-top: 2px solid hsl(var(--primary) / 0.6);
+}
+
+/* Card inner-glow on hover for vivid depth */
+.card-glow:hover {
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.25),
+              0 4px 24px hsl(var(--primary) / 0.08);
+}
+
+/* Scrollbar: coloured thumb */
+::-webkit-scrollbar-thumb {
+  background: hsl(356 30% 18%);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.6);
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BarChart2, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { getGraphStats } from '@/lib/tauri';
 import type {
@@ -16,9 +17,20 @@ import type {
 interface GraphStatsProps {
   startDate: string;
   endDate: string;
+  repelStrength: number;
+  linkStrength: number;
+  onRepelChange: (v: number) => void;
+  onLinkChange: (v: number) => void;
 }
 
-export function GraphStats({ startDate, endDate }: GraphStatsProps) {
+export function GraphStats({
+  startDate,
+  endDate,
+  repelStrength,
+  linkStrength,
+  onRepelChange,
+  onLinkChange,
+}: GraphStatsProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [stats, setStats] = useState<GraphStatsResult | null>(null);
@@ -40,10 +52,9 @@ export function GraphStats({ startDate, endDate }: GraphStatsProps) {
     }
   };
 
-  // ── Collapsed: just a vertical toggle strip ──────────────────────────────
   if (!isOpen) {
     return (
-      <div className="flex flex-col items-center pt-1">
+      <div className="w-9 shrink-0 flex flex-col items-center pt-1">
         <Button
           variant="outline"
           size="icon"
@@ -57,7 +68,6 @@ export function GraphStats({ startDate, endDate }: GraphStatsProps) {
     );
   }
 
-  // ── Expanded panel ────────────────────────────────────────────────────────
   return (
     <Card className="w-72 shrink-0 flex flex-col overflow-hidden">
       {/* Header */}
@@ -75,6 +85,39 @@ export function GraphStats({ startDate, endDate }: GraphStatsProps) {
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
+      </div>
+
+      {/* Physics controls */}
+      <div className="px-3 py-2 border-b space-y-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Physics
+        </p>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Repel force</span>
+            <span className="text-xs font-mono">{repelStrength.toFixed(0)}</span>
+          </div>
+          <Slider
+            min={5000}
+            max={40000}
+            step={100}
+            value={[repelStrength]}
+            onValueChange={([v]) => onRepelChange(v)}
+          />
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Link force</span>
+            <span className="text-xs font-mono">{linkStrength.toFixed(3)}</span>
+          </div>
+          <Slider
+            min={0.00005}
+            max={0.005}
+            step={0.00005}
+            value={[linkStrength]}
+            onValueChange={([v]) => onLinkChange(v)}
+          />
+        </div>
       </div>
 
       {/* Run button */}

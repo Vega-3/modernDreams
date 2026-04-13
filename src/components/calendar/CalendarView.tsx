@@ -20,7 +20,7 @@ export function CalendarView() {
     return dreams.map((dream) => {
       // Get primary tag color or default
       const primaryTag = dream.tags[0];
-      const color = primaryTag ? getCategoryColor(primaryTag.category) : '#6366f1';
+      const color = primaryTag ? getCategoryColor(primaryTag.category) : '#de0615';
 
       return {
         id: dream.id,

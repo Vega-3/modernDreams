@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import { SearchDialog } from '@/components/search/SearchDialog';
 import { DreamEditor } from '@/components/dreams/DreamEditor';
 import { JournalPage } from '@/pages/JournalPage';
@@ -9,6 +10,9 @@ import { TagsPage } from '@/pages/TagsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { GuidePage } from '@/pages/GuidePage';
 import { ThemeAnalysisPage } from '@/pages/ThemeAnalysisPage';
+import { AnalystPage } from '@/pages/AnalystPage';
+import { ArchetypesPage } from '@/pages/ArchetypesPage';
+import { SeriesPage } from '@/pages/SeriesPage';
 import { useUIStore } from '@/stores/uiStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -36,6 +40,12 @@ function App() {
         return <TagsPage />;
       case 'theme':
         return <ThemeAnalysisPage />;
+      case 'archetypes':
+        return <ArchetypesPage />;
+      case 'series':
+        return <SeriesPage />;
+      case 'analyst':
+        return <AnalystPage />;
       case 'settings':
         return <SettingsPage />;
       case 'guide':
@@ -46,11 +56,14 @@ function App() {
   };
 
   return (
-    <AppLayout>
-      {renderPage()}
-      <SearchDialog />
-      <DreamEditor />
-    </AppLayout>
+    <>
+      <ThemeProvider />
+      <AppLayout>
+        {renderPage()}
+        <SearchDialog />
+        <DreamEditor />
+      </AppLayout>
+    </>
   );
 }
 
