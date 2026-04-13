@@ -36,6 +36,7 @@ pub fn export_to_obsidian(db: State<'_, DbConnection>) -> Result<ExportResult, S
             r#"
             SELECT id, title, content_html, content_plain, dream_date,
                    created_at, updated_at, is_lucid, mood_rating, clarity_rating,
+                   meaningfulness_rating,
                    waking_life_context, analysis_notes
             FROM dreams
             ORDER BY dream_date DESC
@@ -56,8 +57,9 @@ pub fn export_to_obsidian(db: State<'_, DbConnection>) -> Result<ExportResult, S
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
-                waking_life_context: row.get(10)?,
-                analysis_notes: row.get(11)?,
+                meaningfulness_rating: row.get(10)?,
+                waking_life_context: row.get(11)?,
+                analysis_notes: row.get(12)?,
                 tags: Vec::new(),
             })
         })
@@ -150,6 +152,9 @@ fn export_dream(dreams_path: &PathBuf, dream: &Dream) -> Result<(), String> {
     }
     if let Some(clarity) = dream.clarity_rating {
         content.push_str(&format!("clarity: {}\n", clarity));
+    }
+    if let Some(meaningfulness) = dream.meaningfulness_rating {
+        content.push_str(&format!("meaningfulness: {}\n", meaningfulness));
     }
 
     if !dream.tags.is_empty() {

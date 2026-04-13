@@ -116,10 +116,11 @@ export function DreamCard({ dream }: DreamCardProps) {
             </p>
           )}
 
-          {(dream.mood_rating || dream.clarity_rating) && (
+          {(dream.mood_rating || dream.clarity_rating || dream.meaningfulness_rating) && (
             <div className="flex gap-4 text-xs text-muted-foreground">
               {dream.mood_rating && <span>Mood: {dream.mood_rating}/10</span>}
               {dream.clarity_rating && <span>Clarity: {dream.clarity_rating}/10</span>}
+              {dream.meaningfulness_rating && <span>Meaningfulness: {dream.meaningfulness_rating}/10</span>}
             </div>
           )}
         </CardContent>

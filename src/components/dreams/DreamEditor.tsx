@@ -407,6 +407,11 @@ export function DreamEditor() {
       } else {
         setTitle('');
         setDreamDate(format(new Date(), 'yyyy-MM-dd'));
+        setIsLucid(false);
+        setMoodRating(null);
+        setClarityRating(null);
+        setMeaningfulnessRating(null);
+        setSelectedTags([]);
         setSelectedClientId('');
         setWakingLifeContext('');
         editor.commands.setContent('');
@@ -1273,7 +1278,7 @@ export function DreamEditor() {
             </div>
           </div>
 
-          {/* Mood, Clarity and Meaningfulness sliders */}
+          {/* Mood, Clarity, and Meaningfulness sliders */}
           <div className="grid grid-cols-3 gap-6">
             <div className="space-y-3">
               <div className="flex justify-between">
@@ -1320,28 +1325,6 @@ export function DreamEditor() {
                 step={1}
               />
             </div>
-          </div>
-
-          {/* Analysis Notes — auto-expanding to fit content */}
-          <div className="space-y-2">
-            <Label htmlFor="analysis-notes">Analysis Notes</Label>
-            <Textarea
-              id="analysis-notes"
-              placeholder="Patterns, symbols, interpretations, recurring themes…"
-              value={analysisNotes}
-              onChange={(e) => {
-                setAnalysisNotes(e.target.value);
-                const el = e.currentTarget;
-                el.style.height = 'auto';
-                el.style.height = `${el.scrollHeight}px`;
-              }}
-              onFocus={(e) => {
-                const el = e.currentTarget;
-                el.style.height = 'auto';
-                el.style.height = `${el.scrollHeight}px`;
-              }}
-              className="resize-none overflow-hidden min-h-[80px]"
-            />
           </div>
         </div>
 
