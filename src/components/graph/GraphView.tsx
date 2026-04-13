@@ -106,8 +106,10 @@ export function GraphView() {
   const [hiddenGroups, setHiddenGroups] = useState<Set<GroupKey>>(new Set());
   const [startDate, setStartDate] = useState(oneYearAgo());
   const [endDate, setEndDate] = useState(today());
-  const [repelStrength, setRepelStrength] = useState(5000);
-  const [linkStrength, setLinkStrength] = useState(0.00025);
+  // Defaults chosen so the 3-D force mapping produces reasonable initial layouts:
+  // repelStrength 20000 → d3 charge ≈ -60; linkStrength 0.001 → link dist ≈ 130
+  const [repelStrength, setRepelStrength] = useState(20000);
+  const [linkStrength, setLinkStrength] = useState(0.001);
 
   useEffect(() => {
     fetchDreams();
@@ -288,10 +290,6 @@ export function GraphView() {
       })
       // Initial data
       .graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
-
-    // Tune the force simulation for an open, spacious layout
-    graph.d3Force('charge')?.strength(-120);
-    graph.d3Force('link')?.distance(70);
 
     // Add bloom pass for the constellation glow effect
     try {
