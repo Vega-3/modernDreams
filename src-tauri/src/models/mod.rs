@@ -12,6 +12,7 @@ pub struct Dream {
     pub is_lucid: bool,
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
+    pub meaningfulness_rating: Option<i32>,
     pub waking_life_context: Option<String>,
     pub analysis_notes: Option<String>,
     #[serde(default)]
@@ -22,11 +23,16 @@ pub struct Dream {
 pub struct WordTagAssociation {
     pub tag_id: String,
     pub word: String,
-    /// 0-based index of the block (paragraph / heading / list-item) the word
-    /// appears in.  Used by the graph builder to give same-paragraph tag pairs
-    /// a higher co-occurrence weight.
+    /// 0-based index of the block (paragraph / heading / list-item).
     #[serde(default)]
     pub paragraph_index: i64,
+    /// 'manual' (user selected) or 'auto' (auto-match / AI Tag applied).
+    #[serde(default = "default_source")]
+    pub source: String,
+}
+
+fn default_source() -> String {
+    "manual".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +41,7 @@ pub struct TagWordUsage {
     pub dream_title: String,
     pub dream_date: String,
     pub word: String,
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +53,7 @@ pub struct CreateDreamInput {
     pub is_lucid: bool,
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
+    pub meaningfulness_rating: Option<i32>,
     pub waking_life_context: Option<String>,
     pub analysis_notes: Option<String>,
     pub tag_ids: Vec<String>,
@@ -63,6 +71,7 @@ pub struct UpdateDreamInput {
     pub is_lucid: bool,
     pub mood_rating: Option<i32>,
     pub clarity_rating: Option<i32>,
+    pub meaningfulness_rating: Option<i32>,
     pub waking_life_context: Option<String>,
     pub analysis_notes: Option<String>,
     pub tag_ids: Vec<String>,

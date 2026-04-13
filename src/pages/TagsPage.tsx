@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Hash } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Hash, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
 import { findMatchingDreams } from '@/lib/tagUtils';
-import { getTagWordAssociations } from '@/lib/tauri';
+import { getTagWordAssociations, deleteWordTagAssociation } from '@/lib/tauri';
 import type { Tag, TagCategory, TagWordUsage, Dream } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
@@ -415,35 +415,94 @@ export function TagsPage() {
             </div>
 
             {editingTag && (
-              <div className="space-y-2 border-t pt-4">
-                <Label>Associated words in dreams</Label>
+              <div className="space-y-3 border-t pt-4">
                 {loadingAssociations ? (
                   <p className="text-xs text-muted-foreground">Loading...</p>
-                ) : wordAssociations.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    No words tagged yet. Select text in the dream editor and click this tag to
-                    associate words.
-                  </p>
-                ) : (
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {wordAssociations.map((assoc, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <span
-                          className="font-medium px-1.5 py-0.5 rounded"
-                          style={{
-                            backgroundColor: editingTag.color + '26',
-                            color: editingTag.color,
-                          }}
-                        >
-                          {assoc.word}
-                        </span>
-                        <span className="text-muted-foreground truncate ml-2">
-                          {assoc.dream_title}
-                        </span>
+                ) : (() => {
+                  const manualAssocs = wordAssociations.filter(a => (a.source ?? 'manual') === 'manual');
+                  const autoAssocs = wordAssociations.filter(a => a.source === 'auto');
+                  return (
+                    <>
+                      {/* Manual associations */}
+                      <div className="space-y-1">
+                        <Label className="text-xs">Words tagged in dreams</Label>
+                        {manualAssocs.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            No words tagged yet. Select text in the dream editor and click this tag to associate words.
+                          </p>
+                        ) : (
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {manualAssocs.map((assoc, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs">
+                                <span
+                                  className="font-medium px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: editingTag.color + '26', color: editingTag.color }}
+                                >
+                                  {assoc.word}
+                                </span>
+                                <span className="text-muted-foreground truncate ml-2">{assoc.dream_title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
+
+                      {/* Learned associations (auto-sourced) */}
+                      {autoAssocs.length > 0 && (
+                        <div className="space-y-1 border-t pt-3">
+                          <Label className="text-xs">Learned associations (AI-tagged)</Label>
+                          <p className="text-[10px] text-muted-foreground mb-1">
+                            Promote a word to add it as an alias, or delete to remove the association.
+                          </p>
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {autoAssocs.map((assoc, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs gap-1">
+                                <span
+                                  className="font-medium px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: editingTag.color + '26', color: editingTag.color }}
+                                >
+                                  {assoc.word}
+                                </span>
+                                <span className="text-muted-foreground truncate flex-1 ml-1">{assoc.dream_title}</span>
+                                <button
+                                  type="button"
+                                  title="Promote to alias"
+                                  onClick={() => {
+                                    const word = assoc.word.toLowerCase();
+                                    const existing = aliases.split(',').map(s => s.trim()).filter(Boolean);
+                                    if (!existing.map(s => s.toLowerCase()).includes(word)) {
+                                      setAliases(existing.length > 0 ? existing.join(', ') + ', ' + word : word);
+                                    }
+                                  }}
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <ArrowUp className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Delete association"
+                                  onClick={async () => {
+                                    try {
+                                      await deleteWordTagAssociation(assoc.dream_id, editingTag.id, assoc.word);
+                                      setWordAssociations(prev =>
+                                        prev.filter(a => !(a.dream_id === assoc.dream_id && a.word === assoc.word && a.source === 'auto'))
+                                      );
+                                    } catch (e) {
+                                      console.error('Failed to delete association:', e);
+                                    }
+                                  }}
+                                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

@@ -275,6 +275,86 @@ Rules for suggested_tag_names:
     Ok(parsed)
 }
 
+// ─── AI inline tag detection ──────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize)]
+pub struct InlineTagEntry {
+    pub text: String,
+    pub tag_name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct InlineTagResult {
+    pub inline_tags: Vec<InlineTagEntry>,
+}
+
+/// Ask Claude to identify which exact words/phrases in the dream text correspond
+/// to tags in the available vocabulary.  Returns a list of (phrase → tag_name)
+/// pairs that the frontend uses to apply inline highlights.
+#[tauri::command]
+pub async fn ai_tag_dream(
+    dream_text: String,
+    available_tags: String,
+    api_key: String,
+) -> Result<InlineTagResult, String> {
+    if api_key.trim().is_empty() {
+        return Err("No Anthropic API key configured. Please add your key in Settings.".to_string());
+    }
+    if dream_text.trim().is_empty() {
+        return Err("Dream text is empty.".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let model = "claude-haiku-4-5-20251001";
+
+    let tags_json: serde_json::Value = serde_json::from_str(&available_tags)
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+    let user_prompt = format!(
+        r#"You are an inline dream-tag annotator.
+
+DREAM TEXT:
+{dream_text}
+
+AVAILABLE TAGS (name + aliases):
+{tags_json}
+
+Your task: identify specific words or short phrases in the dream text that correspond to the available tags.
+Return ONLY a valid JSON object with this structure:
+{{
+  "inline_tags": [
+    {{"text": "exact phrase from dream text", "tag_name": "matching tag name"}},
+    ...
+  ]
+}}
+
+Rules:
+- "text" must be the exact substring (case preserved) as it appears in the dream text.
+- "tag_name" must be an existing tag name from the list above.
+- A tag can appear multiple times if it matches different phrases.
+- Match by tag name OR any of the tag's aliases.
+- Prefer longer, more specific matches over single common words.
+- Omit trivial matches (articles, pronouns, common verbs unless they clearly map to a tag).
+- Return an empty array if nothing meaningful matches."#,
+    );
+
+    let request = AnthropicRequest {
+        model,
+        max_tokens: 1024,
+        messages: vec![Message {
+            role: "user",
+            content: vec![ContentBlock::Text { text: &user_prompt }],
+        }],
+    };
+
+    let raw = call_claude(&client, api_key.trim(), &request).await?;
+    let json_str = extract_json(&raw);
+    let parsed: InlineTagResult = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse AI Tag response: {e}\nRaw: {raw}"))?;
+
+    Ok(parsed)
+}
+
 /// Strip optional markdown code fences and extract the JSON object.
 fn extract_json(s: &str) -> String {
     let s = s.trim();
