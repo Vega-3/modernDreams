@@ -3,7 +3,7 @@ import ForceGraph3D from '3d-force-graph';
 import type { NodeObject, LinkObject } from '3d-force-graph';
 import * as THREE from 'three';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { Eye, EyeOff, Maximize2, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, Maximize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -95,6 +95,8 @@ export function GraphView() {
   const graphRef = useRef<any>(null);
   const openEditorRef = useRef<(id: string) => void>(() => {});
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // fittedRef: guards against the empty-data onEngineStop locking out the real-data auto-fit
+  const fittedRef = useRef(false);
 
   const { dreams, fetchDreams } = useDreamStore();
   const { tags, fetchTags } = useTagStore();
@@ -110,6 +112,7 @@ export function GraphView() {
   // repelStrength 20000 → d3 charge ≈ -60; linkStrength 0.001 → link dist ≈ 130
   const [repelStrength, setRepelStrength] = useState(20000);
   const [linkStrength, setLinkStrength] = useState(0.001);
+  const [showControls, setShowControls] = useState(false);
 
   useEffect(() => {
     fetchDreams();
@@ -218,7 +221,7 @@ export function GraphView() {
     const w = Math.max(container.offsetWidth, 400);
     const h = Math.max(container.offsetHeight, 400);
 
-    const graph = new ForceGraph3D(container, { rendererConfig: { antialias: true, alpha: true } })
+    const graph = new ForceGraph3D(container, { rendererConfig: { antialias: true } })
       .width(w)
       .height(h)
       .backgroundColor('#08080f')
@@ -288,6 +291,16 @@ export function GraphView() {
       .onBackgroundClick(() => {
         graph.zoomToFit(600, 60);
       })
+      // Auto-fit once the simulation settles — but only when we have real nodes.
+      // Without this guard the empty-data stop (0 nodes on init) sets fittedRef=true
+      // and the camera never repositions when the real data arrives.
+      .onEngineStop(() => {
+        const nodeCount = (graph.graphData() as { nodes: NodeObject[] }).nodes?.length ?? 0;
+        if (nodeCount > 0 && !fittedRef.current) {
+          fittedRef.current = true;
+          graph.zoomToFit(600, 60);
+        }
+      })
       // Initial data
       .graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
 
@@ -325,6 +338,8 @@ export function GraphView() {
   // ── Reactively update graph data ──────────────────────────────────────────
   useEffect(() => {
     if (!graphRef.current) return;
+    // Reset so onEngineStop will trigger a fresh zoomToFit once the simulation settles
+    fittedRef.current = false;
     graphRef.current.graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
   }, [graphData]);
 
@@ -421,11 +436,39 @@ export function GraphView() {
 
       {/* ── 3D canvas + stats panel ────────────────────────────────────────── */}
       <div className="flex-1 flex gap-3 min-h-0">
-        <div
-          ref={containerRef}
-          className="flex-1 rounded-lg border overflow-hidden min-h-0"
-          style={{ background: '#08080f' }}
-        />
+        {/* Relative wrapper so the controls button can be layered over the canvas */}
+        <div className="flex-1 relative min-h-0">
+          <div
+            ref={containerRef}
+            className="absolute inset-0 rounded-lg border overflow-hidden"
+            style={{ background: '#08080f' }}
+          />
+          {/* Controls overlay — bottom-left of the canvas */}
+          <div className="absolute bottom-3 left-3 z-10">
+            <button
+              onClick={() => setShowControls((v) => !v)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs
+                         bg-black/60 backdrop-blur-sm border border-white/10
+                         text-white/60 hover:text-white transition-colors select-none"
+            >
+              <HelpCircle className="h-3 w-3 shrink-0" />
+              Controls
+            </button>
+            {showControls && (
+              <div className="absolute bottom-full mb-2 left-0 w-52 p-3 rounded-lg
+                              bg-black/80 backdrop-blur-md border border-white/10
+                              text-xs space-y-1.5">
+                <p className="font-semibold text-white/90 mb-2">Interactions</p>
+                <p className="text-white/60">Left-drag &nbsp;—&nbsp; <span className="text-white/90">Rotate</span></p>
+                <p className="text-white/60">Right-drag &nbsp;—&nbsp; <span className="text-white/90">Pan</span></p>
+                <p className="text-white/60">Scroll &nbsp;—&nbsp; <span className="text-white/90">Zoom</span></p>
+                <p className="text-white/60">Click node &nbsp;—&nbsp; <span className="text-white/90">Fly to it</span></p>
+                <p className="text-white/60">Dbl-click dream &nbsp;—&nbsp; <span className="text-white/90">Open editor</span></p>
+                <p className="text-white/60">Click background &nbsp;—&nbsp; <span className="text-white/90">Fit all</span></p>
+              </div>
+            )}
+          </div>
+        </div>
         <GraphStats
           startDate={startDate}
           endDate={endDate}
