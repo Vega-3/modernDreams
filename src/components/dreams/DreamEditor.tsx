@@ -149,65 +149,52 @@ const CONTRACTIONS: [RegExp, string][] = [
 ];
 
 /**
- * Context-aware grammar and spelling fixes.
+ * Apply grammar/spelling fixes to a single plain-text string.
  *
- * Processes text nodes extracted from HTML.  Improvements over the original:
- * - "wont" only → "won't" when NOT immediately followed by "to" (preserves the
- *   formal adjective "wont to do").
- * - Capitalisation after sentence-ending punctuation is suppressed when the
- *   preceding word is a known abbreviation (Dr., Mr., etc.).
- * - Common one-character typos corrected (teh→the, recieve→receive, etc.).
- * - Repeated punctuation collapsed (... is preserved; ,, → ,).
- * - Smart apostrophe normalisation (curly → straight for editing clarity).
- * - Double-space collapse.
+ * Operates on raw text content (no HTML), so it is safe to call directly
+ * on ProseMirror text nodes — all existing marks are preserved by the
+ * caller.  Rules:
+ * - Double-space collapse and smart-quote → straight-quote normalisation.
  * - Standalone "i" → "I".
+ * - Common typo corrections (see TYPOS).
+ * - "wont" → "won't" only when NOT followed by "to" (preserves the adj).
+ * - Contraction corrections (see CONTRACTIONS).
+ * - Capitalise after sentence-ending punctuation (.!?) unless preceded by
+ *   a known abbreviation (Dr., Mr., etc.).
  */
-function applyGrammarFixes(html: string): string {
-  const parts: string[] = html.split(/(>[^<]*<)/g);
+function applyTextNodeFixes(text: string): string {
+  let t = text;
 
-  return parts.map((part) => {
-    // Only process text-node segments (between > and <)
-    if (!part.startsWith('>') || !part.endsWith('<')) return part;
+  // 1. Normalise whitespace and smart punctuation
+  t = t.replace(/  +/g, ' ');
+  t = t.replace(/[\u2018\u2019]/g, "'");  // curly single → straight
+  t = t.replace(/[\u201C\u201D]/g, '"');  // curly double → straight
+  t = t.replace(/,,/g, ',');
 
-    let t = part.slice(1, -1); // strip surrounding > and <
+  // 2. Standalone "i" → "I"
+  t = t.replace(/\bi\b/g, 'I');
 
-    // ── 1. Normalise whitespace and smart punctuation ─────────────────────
-    t = t.replace(/  +/g, ' ');
-    t = t.replace(/[\u2018\u2019]/g, "'");  // curly single quotes → straight
-    t = t.replace(/[\u201C\u201D]/g, '"');  // curly double quotes → straight
-    t = t.replace(/,,/g, ',').replace(/\.\.\.\./g, '…');
+  // 3. Common typos
+  for (const [pattern, replacement] of TYPOS) {
+    t = t.replace(pattern, replacement);
+  }
 
-    // ── 2. Standalone "i" → "I" ───────────────────────────────────────────
-    t = t.replace(/\bi\b/g, 'I');
+  // 4. "wont" → "won't" (context-aware: not when followed by "to")
+  t = t.replace(/\bwont\b(?!\s+to\b)/gi, "won't");
 
-    // ── 3. Common typos ───────────────────────────────────────────────────
-    for (const [pattern, replacement] of TYPOS) {
-      t = t.replace(pattern, replacement);
-    }
+  // 5. Contractions
+  for (const [pattern, replacement] of CONTRACTIONS) {
+    t = t.replace(pattern, replacement);
+  }
 
-    // ── 4. Contractions with context ─────────────────────────────────────
-    // "wont" as a contraction only when NOT followed by "to" (the formal adj)
-    t = t.replace(/\bwont\b(?!\s+to\b)/gi, "won't");
+  // 6. Capitalise after sentence-ending punctuation within this text node
+  t = t.replace(/([.!?]\s+)([a-z])/g, (match, punct, letter, offset) => {
+    const preceding = t.slice(0, offset);
+    if (ABBREV_PATTERN.test(preceding)) return match;
+    return punct + letter.toUpperCase();
+  });
 
-    for (const [pattern, replacement] of CONTRACTIONS) {
-      t = t.replace(pattern, replacement);
-    }
-
-    // ── 5. Capitalise after sentence-ending punctuation ───────────────────
-    // Suppress if the preceding text ends with an abbreviation
-    t = t.replace(/([.!?]\s+)([a-z])/g, (match, punct, letter, offset) => {
-      const preceding = t.slice(0, offset);
-      if (ABBREV_PATTERN.test(preceding)) return match; // abbreviation — don't capitalise
-      return punct + letter.toUpperCase();
-    });
-
-    // ── 6. Capitalise the very first character of the text node ──────────
-    if (t.length > 0 && /[a-z]/.test(t[0])) {
-      t = t[0].toUpperCase() + t.slice(1);
-    }
-
-    return '>' + t + '<';
-  }).join('');
+  return t;
 }
 
 function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
@@ -729,8 +716,34 @@ export function DreamEditor() {
 
   const handleGrammarFix = () => {
     if (!editor) return;
-    const fixed = applyGrammarFixes(editor.getHTML());
-    editor.commands.setContent(fixed, false);
+    const { state } = editor;
+    const { tr, schema } = state;
+
+    // Walk every text node in the document, apply fixes in-place.
+    // Using tr.mapping.map keeps positions correct as earlier replacements
+    // shift subsequent offsets.  Marks on each node are preserved verbatim.
+    state.doc.descendants((node, pos, parent, index) => {
+      if (!node.isText || !node.text) return;
+
+      let fixed = applyTextNodeFixes(node.text);
+
+      // Capitalise the first letter of the first text node in each block
+      // paragraph (e.g. a fresh line the user started lowercase).
+      if (parent?.isBlock && index === 0 && fixed.length > 0 && /[a-z]/.test(fixed[0])) {
+        fixed = fixed[0].toUpperCase() + fixed.slice(1);
+      }
+
+      if (fixed === node.text) return;
+
+      const mappedFrom = tr.mapping.map(pos);
+      const mappedTo   = tr.mapping.map(pos + node.text.length);
+      tr.replaceWith(mappedFrom, mappedTo, schema.text(fixed, node.marks));
+    });
+
+    // Only dispatch — and trigger onUpdate / draft-save — if something changed.
+    if (tr.docChanged) {
+      editor.view.dispatch(tr);
+    }
   };
 
   const handleAIAnalysis = async () => {
