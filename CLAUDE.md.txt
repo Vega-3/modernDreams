@@ -2,7 +2,17 @@ Project information
 
 See the README.md file for a project overview.
 
-NEVER write any .md files except for README.md
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `python3 -c "from graphify.watch import _rebuild_code; from pathlib import Path; _rebuild_code(Path('.'))"` to keep the graph current
+
+
+NEVER write any .md files inside the codebase except for README.md
 Build and Test Commands
 
     Install: just install or pip install -e ".[dev]"

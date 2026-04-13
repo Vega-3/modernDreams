@@ -12,7 +12,15 @@
       "Bash(gh auth:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Bash(grep -E \"\\\\.\\(md|json|db|txt\\)$\")"
+      "Bash(grep -E \"\\\\.\\(md|json|db|txt\\)$\")",
+      "Bash(python -c \"import sys; open\\('.graphify_python', 'w'\\).write\\(sys.executable\\)\")",
+      "Bash(python -c ':*)",
+      "Bash(mkdir:*)",
+      "Bash(rm -f .graphify_cached.json .graphify_uncached.txt .graphify_semantic_new.json)",
+      "Bash(rm -f .graphify_detect.json .graphify_extract.json .graphify_ast.json .graphify_semantic.json .graphify_analysis.json .graphify_labels.json .graphify_extract_clean.json .graphify_python)",
+      "Bash(rm -f graphify-out/.graphify_chunk_0*.json graphify-out/.needs_update)",
+      "Bash(python -m graphify claude install)",
+      "Bash(graphify claude:*)"
     ]
   }
 }
