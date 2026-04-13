@@ -11,6 +11,7 @@ export interface Dream {
   is_lucid: boolean;
   mood_rating: number | null;
   clarity_rating: number | null;
+  meaningfulness_rating: number | null;
   waking_life_context?: string | null;
   tags: Tag[];
 }
@@ -47,6 +48,7 @@ export interface CreateDreamInput {
   is_lucid: boolean;
   mood_rating: number | null;
   clarity_rating: number | null;
+  meaningfulness_rating: number | null;
   waking_life_context?: string | null;
   tag_ids: string[];
   word_tag_associations: WordTagAssociation[];

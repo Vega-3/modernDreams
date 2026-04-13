@@ -50,6 +50,7 @@ interface EditorDraft {
   isLucid: boolean;
   moodRating: number | null;
   clarityRating: number | null;
+  meaningfulnessRating: number | null;
   selectedTagIds: string[];
   wakingLifeContext: string;
   contentHtml: string;
@@ -152,6 +153,7 @@ export function DreamEditor() {
   const [isLucid, setIsLucid] = useState(false);
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [clarityRating, setClarityRating] = useState<number | null>(null);
+  const [meaningfulnessRating, setMeaningfulnessRating] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [wakingLifeContext, setWakingLifeContext] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -191,6 +193,7 @@ export function DreamEditor() {
       setIsLucid(editingDream.is_lucid);
       setMoodRating(editingDream.mood_rating);
       setClarityRating(editingDream.clarity_rating);
+      setMeaningfulnessRating(editingDream.meaningfulness_rating);
       setSelectedTags(editingDream.tags);
       setWakingLifeContext(editingDream.waking_life_context || '');
       editor.commands.setContent(editingDream.content_html);
@@ -215,6 +218,7 @@ export function DreamEditor() {
         setIsLucid(false);
         setMoodRating(null);
         setClarityRating(null);
+        setMeaningfulnessRating(null);
         setSelectedTags([]);
         setWakingLifeContext('');
         editor.commands.setContent('');
@@ -240,6 +244,7 @@ export function DreamEditor() {
         isLucid,
         moodRating,
         clarityRating,
+        meaningfulnessRating,
         selectedTagIds: selectedTags.map((t) => t.id),
         wakingLifeContext,
         contentHtml: editor.getHTML(),
@@ -249,7 +254,7 @@ export function DreamEditor() {
     } catch {
       // ignore storage errors
     }
-  }, [editorOpen, editingDreamId, editor, title, dreamDate, isLucid, moodRating, clarityRating, selectedTags, wakingLifeContext]);
+  }, [editorOpen, editingDreamId, editor, title, dreamDate, isLucid, moodRating, clarityRating, meaningfulnessRating, selectedTags, wakingLifeContext]);
 
   useEffect(() => {
     if (!editorOpen || editingDreamId) return;
@@ -280,6 +285,7 @@ export function DreamEditor() {
       setIsLucid(draft.isLucid || false);
       setMoodRating(draft.moodRating ?? null);
       setClarityRating(draft.clarityRating ?? null);
+      setMeaningfulnessRating(draft.meaningfulnessRating ?? null);
       setWakingLifeContext(draft.wakingLifeContext || '');
       editor.commands.setContent(draft.contentHtml || '');
       // Restore tags by ID
@@ -317,6 +323,7 @@ export function DreamEditor() {
           is_lucid: isLucid,
           mood_rating: moodRating,
           clarity_rating: clarityRating,
+          meaningfulness_rating: meaningfulnessRating,
           waking_life_context: wakingLifeContext.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
@@ -330,6 +337,7 @@ export function DreamEditor() {
           is_lucid: isLucid,
           mood_rating: moodRating,
           clarity_rating: clarityRating,
+          meaningfulness_rating: meaningfulnessRating,
           waking_life_context: wakingLifeContext.trim() || null,
           tag_ids: selectedTags.map((t) => t.id),
           word_tag_associations: wordTagAssociations,
@@ -626,8 +634,8 @@ export function DreamEditor() {
             </div>
           </div>
 
-          {/* Mood and Clarity sliders */}
-          <div className="grid grid-cols-2 gap-6">
+          {/* Mood, Clarity, and Meaningfulness sliders */}
+          <div className="grid grid-cols-3 gap-6">
             <div className="space-y-3">
               <div className="flex justify-between">
                 <Label>Mood</Label>
@@ -653,6 +661,21 @@ export function DreamEditor() {
               <Slider
                 value={clarityRating !== null ? [clarityRating] : [5]}
                 onValueChange={(v) => setClarityRating(v[0])}
+                min={1}
+                max={10}
+                step={1}
+              />
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <Label>Meaningfulness</Label>
+                <span className="text-sm text-muted-foreground">
+                  {meaningfulnessRating !== null ? meaningfulnessRating : '-'}
+                </span>
+              </div>
+              <Slider
+                value={meaningfulnessRating !== null ? [meaningfulnessRating] : [5]}
+                onValueChange={(v) => setMeaningfulnessRating(v[0])}
                 min={1}
                 max={10}
                 step={1}

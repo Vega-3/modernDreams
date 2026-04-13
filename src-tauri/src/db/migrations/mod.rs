@@ -105,6 +105,12 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         [],
     );
 
+    // Additive migration: add meaningfulness_rating column to existing databases.
+    let _ = conn.execute(
+        "ALTER TABLE dreams ADD COLUMN meaningfulness_rating INTEGER",
+        [],
+    );
+
     // Additive migration: tag notes for the Theme Analysis page.
     // Using CREATE TABLE IF NOT EXISTS so it is safe to run on every startup.
     conn.execute_batch(

@@ -21,7 +21,8 @@ pub fn search_dreams(
             .prepare(
                 r#"
                 SELECT id, title, content_html, content_plain, dream_date,
-                       created_at, updated_at, is_lucid, mood_rating, clarity_rating
+                       created_at, updated_at, is_lucid, mood_rating, clarity_rating,
+                       meaningfulness_rating, waking_life_context
                 FROM dreams
                 ORDER BY dream_date DESC, created_at DESC
                 LIMIT 50
@@ -42,6 +43,8 @@ pub fn search_dreams(
                     is_lucid: row.get(7)?,
                     mood_rating: row.get(8)?,
                     clarity_rating: row.get(9)?,
+                    meaningfulness_rating: row.get(10)?,
+                    waking_life_context: row.get(11)?,
                     tags: Vec::new(),
                 })
             })
@@ -65,7 +68,8 @@ pub fn search_dreams(
         .prepare(
             r#"
             SELECT d.id, d.title, d.content_html, d.content_plain, d.dream_date,
-                   d.created_at, d.updated_at, d.is_lucid, d.mood_rating, d.clarity_rating
+                   d.created_at, d.updated_at, d.is_lucid, d.mood_rating, d.clarity_rating,
+                   d.meaningfulness_rating, d.waking_life_context
             FROM dreams d
             WHERE d.id IN (SELECT id FROM dreams_fts WHERE dreams_fts MATCH ?1)
             ORDER BY d.dream_date DESC, d.created_at DESC
@@ -87,6 +91,8 @@ pub fn search_dreams(
                 is_lucid: row.get(7)?,
                 mood_rating: row.get(8)?,
                 clarity_rating: row.get(9)?,
+                meaningfulness_rating: row.get(10)?,
+                waking_life_context: row.get(11)?,
                 tags: Vec::new(),
             })
         })
