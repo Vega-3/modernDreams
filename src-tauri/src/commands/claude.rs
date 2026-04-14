@@ -228,7 +228,7 @@ pub async fn analyze_dream(
 
     let system = "You are an expert Jungian dream analyst and symbolic psychologist. \
         Analyse dreams carefully, attending to symbolic imagery, emotional tone, \
-        recurring motifs, and archetypal patterns.";
+        recurring motifs, and archetypal patterns. Frame your analysis as questions into the symbols, themes and emotions present in the dream, rather than trying to provide fixed interpretations. ";
 
     let user_prompt = format!(
         r#"Analyse the following dream journal entry.
@@ -237,7 +237,7 @@ DREAM TEXT:
 {dream_text}
 
 AVAILABLE TAGS (use these names when assigning; you may suggest genuinely new names
-if no existing tag fits, but keep new suggestions minimal):
+if no existing tag fits):
 {tags_json}
 
 Return ONLY a valid JSON object with exactly these two keys:
@@ -248,9 +248,8 @@ Return ONLY a valid JSON object with exactly these two keys:
 
 Rules for suggested_tag_names:
 - Use existing tag names where possible (exact match, case-insensitive).
-- Suggest a new name if no existing tag adequately captures a meaningful symbol, character, or theme.
-- New tag suggestions are welcome for any clearly distinct symbolic element, recurring figure, or emotional quality not already in the list — aim for concise, one-or-two-word names.
-- Return between 3 and 10 tag suggestions total."#,
+- Suggest a new name if no existing tag adequately captures a meaningful or repeated symbol, character, or theme.
+- New tag suggestions are welcome for any clearly distinct symbolic element, recurring figure, or emotional quality not already in the list — aim for concise, one-or-two-word names."#,
     );
 
     let request = AnthropicRequest {

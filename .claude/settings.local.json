@@ -20,7 +20,12 @@
       "Bash(rm -f .graphify_detect.json .graphify_extract.json .graphify_ast.json .graphify_semantic.json .graphify_analysis.json .graphify_labels.json .graphify_extract_clean.json .graphify_python)",
       "Bash(rm -f graphify-out/.graphify_chunk_0*.json graphify-out/.needs_update)",
       "Bash(python -m graphify claude install)",
-      "Bash(graphify claude:*)"
+      "Bash(graphify claude:*)",
+      "Bash(node -e \"const { forceSimulation } = require\\('./node_modules/d3-force-3d/src/index.js'\\); const sim = forceSimulation\\(\\); console.log\\('tick:', typeof sim.tick\\); console.log\\('numDimensions:', typeof sim.numDimensions\\);\")",
+      "Bash(npm show:*)",
+      "Bash(npm list:*)",
+      "Bash(npm install:*)",
+      "Bash(npx patch-package:*)"
     ]
   }
 }
