@@ -18,8 +18,8 @@ import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
 import { findMatchingDreams } from '@/lib/tagUtils';
-import { getTagWordAssociations, deleteWordTagAssociation } from '@/lib/tauri';
-import type { Tag, TagCategory, TagWordUsage, Dream } from '@/lib/tauri';
+import { getTagWordAssociations, deleteWordTagAssociation, getDream, updateDream } from '@/lib/tauri';
+import type { Tag, TagCategory, TagWordUsage, WordTagAssociation, Dream } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
   { id: 'location', label: 'Locations' },
@@ -48,6 +48,92 @@ const EMOTIVE_SUBCATEGORIES = [
   { id: 'neutral', label: 'Neutral', color: '#f97316' },
   { id: 'negative', label: 'Negative', color: '#f43f5e' },
 ] as const;
+
+// ─── HTML helpers for inline-tag promotion ───────────────────────────────────
+
+/**
+ * Wrap every occurrence of `word` in the dream HTML with a tagHighlight span.
+ * Already-tagged spans (data-tags) are skipped to prevent double-wrapping.
+ */
+function addInlineTagToHtml(html: string, word: string, tag: Tag): string {
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(html, 'text/html');
+  const tagRef = JSON.stringify([{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }]);
+  const wordLower = word.toLowerCase();
+
+  function processTextNode(textNode: Text): void {
+    const text = textNode.textContent ?? '';
+    const lower = text.toLowerCase();
+    let idx = lower.indexOf(wordLower);
+    if (idx === -1) return;
+
+    const fragment = parsed.createDocumentFragment();
+    let lastIdx = 0;
+    while (idx !== -1) {
+      if (idx > lastIdx) {
+        fragment.appendChild(parsed.createTextNode(text.slice(lastIdx, idx)));
+      }
+      const span = parsed.createElement('span');
+      span.setAttribute('data-tags', tagRef);
+      span.setAttribute('data-source', 'auto');
+      span.textContent = text.slice(idx, idx + word.length);
+      fragment.appendChild(span);
+      lastIdx = idx + word.length;
+      idx = lower.indexOf(wordLower, lastIdx);
+    }
+    if (lastIdx < text.length) {
+      fragment.appendChild(parsed.createTextNode(text.slice(lastIdx)));
+    }
+    textNode.parentNode?.replaceChild(fragment, textNode);
+  }
+
+  function processNode(node: Node): void {
+    if (node.nodeType === Node.TEXT_NODE) {
+      processTextNode(node as Text);
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      // Don't descend into existing tag spans — avoid double-wrapping.
+      if ((node as Element).hasAttribute('data-tags')) return;
+      Array.from(node.childNodes).forEach(processNode);
+    }
+  }
+
+  processNode(parsed.body);
+  return parsed.body.innerHTML;
+}
+
+/**
+ * Derive word-tag associations from all data-tags spans in the HTML.
+ * Mirrors extractWordTagAssociations() in DreamEditor for consistency.
+ */
+function extractWordTagAssociationsFromHtml(html: string): WordTagAssociation[] {
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(html, 'text/html');
+  const associations: WordTagAssociation[] = [];
+  const seen = new Set<string>();
+  let paragraphIndex = 0;
+
+  for (const block of Array.from(parsed.body.children)) {
+    for (const span of Array.from(block.querySelectorAll('span[data-tags]'))) {
+      const tagsAttr = span.getAttribute('data-tags');
+      const source = (span.getAttribute('data-source') ?? 'manual') as 'manual' | 'auto';
+      const word = (span.textContent ?? '').trim();
+      if (!tagsAttr || !word) continue;
+      try {
+        const tagRefs: Array<{ tagId: string }> = JSON.parse(tagsAttr);
+        tagRefs.forEach(({ tagId }) => {
+          if (tagId.startsWith('arch:')) return; // exclude archetype pseudo-tags
+          const key = `${tagId}:${word.toLowerCase()}:${paragraphIndex}:${source}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex, source });
+          }
+        });
+      } catch { /* ignore malformed JSON */ }
+    }
+    paragraphIndex++;
+  }
+  return associations;
+}
 
 export function TagsPage() {
   const { tags, fetchTags, createTag, updateTag, deleteTag } = useTagStore();
@@ -115,6 +201,60 @@ export function TagsPage() {
       setWordAssociations([]);
     }
     setIsEditorOpen(true);
+  };
+
+  /**
+   * Promote an AI-learned word association: adds the tag to the dream and inserts
+   * an inline tagHighlight span for that word in the dream's HTML.
+   *
+   * Trigger: user clicks the ArrowUp button on a learned association row.
+   * Why: the word is already known to map to this tag; formalising it makes the
+   *      link explicit in the dream text and graph, not just as a learned hint.
+   * Outcome: dream is updated with the new tag + inline span; row is removed from
+   *          the "Learned associations" list to reflect that it is now committed.
+   */
+  const handlePromoteToInlineTag = async (assoc: TagWordUsage) => {
+    if (!editingTag) return;
+    setLoadingAssociations(true);
+    try {
+      const dream = await getDream(assoc.dream_id);
+      if (!dream) return;
+
+      const newHtml = addInlineTagToHtml(dream.content_html, assoc.word, editingTag);
+      const wordAssocs = extractWordTagAssociationsFromHtml(newHtml);
+
+      const existingTagIds = dream.tags.map((t) => t.id);
+      const tagIds = existingTagIds.includes(editingTag.id)
+        ? existingTagIds
+        : [...existingTagIds, editingTag.id];
+
+      await updateDream({
+        id: dream.id,
+        title: dream.title,
+        content_html: newHtml,
+        content_plain: dream.content_plain,
+        dream_date: dream.dream_date,
+        is_lucid: dream.is_lucid,
+        mood_rating: dream.mood_rating,
+        clarity_rating: dream.clarity_rating,
+        meaningfulness_rating: dream.meaningfulness_rating ?? null,
+        waking_life_context: dream.waking_life_context,
+        analysis_notes: dream.analysis_notes,
+        tag_ids: tagIds,
+        word_tag_associations: wordAssocs,
+      });
+
+      // Remove from the learned list — the association is now committed.
+      setWordAssociations((prev) =>
+        prev.filter(
+          (a) => !(a.dream_id === assoc.dream_id && a.word === assoc.word && a.source === 'auto'),
+        ),
+      );
+    } catch (e) {
+      console.error('Failed to promote word to inline tag:', e);
+    } finally {
+      setLoadingAssociations(false);
+    }
   };
 
   const handleSave = async () => {
@@ -466,14 +606,8 @@ export function TagsPage() {
                                 <span className="text-muted-foreground truncate flex-1 ml-1">{assoc.dream_title}</span>
                                 <button
                                   type="button"
-                                  title="Promote to alias"
-                                  onClick={() => {
-                                    const word = assoc.word.toLowerCase();
-                                    const existing = aliases.split(',').map(s => s.trim()).filter(Boolean);
-                                    if (!existing.map(s => s.toLowerCase()).includes(word)) {
-                                      setAliases(existing.length > 0 ? existing.join(', ') + ', ' + word : word);
-                                    }
-                                  }}
+                                  title="Add tag to this dream with inline highlight"
+                                  onClick={() => handlePromoteToInlineTag(assoc)}
                                   className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                                 >
                                   <ArrowUp className="h-3 w-3" />
