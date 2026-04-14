@@ -51,13 +51,21 @@ const EMOTIVE_SUBCATEGORIES = [
 
 // ─── HTML helpers for inline-tag promotion ───────────────────────────────────
 
+// Mirrors the constant in DreamEditor — tags whose IDs start with this prefix
+// are archetype pseudo-tags and must be excluded from word-tag associations.
+const ARCHETYPE_TAG_PREFIX = 'arch:';
+
 /**
- * Wrap every occurrence of `word` in the dream HTML with a tagHighlight span.
- * Already-tagged spans (data-tags) are skipped to prevent double-wrapping.
+ * Parse the dream HTML once, wrap every occurrence of `word` with a tagHighlight
+ * span, then immediately extract all word-tag associations from the modified DOM.
+ * Combining both steps into one parse avoids a second DOMParser round-trip.
  */
-function addInlineTagToHtml(html: string, word: string, tag: Tag): string {
-  const parser = new DOMParser();
-  const parsed = parser.parseFromString(html, 'text/html');
+function addInlineTagAndExtractAssociations(
+  html: string,
+  word: string,
+  tag: Tag,
+): { newHtml: string; associations: WordTagAssociation[] } {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
   const tagRef = JSON.stringify([{ tagId: tag.id, tagColor: tag.color, tagName: tag.name }]);
   const wordLower = word.toLowerCase();
 
@@ -98,41 +106,33 @@ function addInlineTagToHtml(html: string, word: string, tag: Tag): string {
   }
 
   processNode(parsed.body);
-  return parsed.body.innerHTML;
-}
 
-/**
- * Derive word-tag associations from all data-tags spans in the HTML.
- * Mirrors extractWordTagAssociations() in DreamEditor for consistency.
- */
-function extractWordTagAssociationsFromHtml(html: string): WordTagAssociation[] {
-  const parser = new DOMParser();
-  const parsed = parser.parseFromString(html, 'text/html');
+  // Derive word-tag associations from the now-modified DOM (same parse, second pass).
   const associations: WordTagAssociation[] = [];
   const seen = new Set<string>();
   let paragraphIndex = 0;
-
   for (const block of Array.from(parsed.body.children)) {
     for (const span of Array.from(block.querySelectorAll('span[data-tags]'))) {
       const tagsAttr = span.getAttribute('data-tags');
       const source = (span.getAttribute('data-source') ?? 'manual') as 'manual' | 'auto';
-      const word = (span.textContent ?? '').trim();
-      if (!tagsAttr || !word) continue;
+      const spanWord = (span.textContent ?? '').trim();
+      if (!tagsAttr || !spanWord) continue;
       try {
         const tagRefs: Array<{ tagId: string }> = JSON.parse(tagsAttr);
         tagRefs.forEach(({ tagId }) => {
-          if (tagId.startsWith('arch:')) return; // exclude archetype pseudo-tags
-          const key = `${tagId}:${word.toLowerCase()}:${paragraphIndex}:${source}`;
+          if (tagId.startsWith(ARCHETYPE_TAG_PREFIX)) return;
+          const key = `${tagId}:${spanWord.toLowerCase()}:${paragraphIndex}:${source}`;
           if (!seen.has(key)) {
             seen.add(key);
-            associations.push({ tag_id: tagId, word, paragraph_index: paragraphIndex, source });
+            associations.push({ tag_id: tagId, word: spanWord, paragraph_index: paragraphIndex, source });
           }
         });
       } catch { /* ignore malformed JSON */ }
     }
     paragraphIndex++;
   }
-  return associations;
+
+  return { newHtml: parsed.body.innerHTML, associations };
 }
 
 export function TagsPage() {
@@ -220,8 +220,11 @@ export function TagsPage() {
       const dream = await getDream(assoc.dream_id);
       if (!dream) return;
 
-      const newHtml = addInlineTagToHtml(dream.content_html, assoc.word, editingTag);
-      const wordAssocs = extractWordTagAssociationsFromHtml(newHtml);
+      const { newHtml, associations: wordAssocs } = addInlineTagAndExtractAssociations(
+        dream.content_html,
+        assoc.word,
+        editingTag,
+      );
 
       const existingTagIds = dream.tags.map((t) => t.id);
       const tagIds = existingTagIds.includes(editingTag.id)

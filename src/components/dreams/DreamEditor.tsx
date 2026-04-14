@@ -186,9 +186,8 @@ function makeRemoveTagAtSpanCommand(tagId: string, nearPos: number) {
     if (!markType) return false;
 
     // Find the text node with this tagId that is closest to nearPos.
-    let bestPos = -1;
-    let bestNodeSize = 0;
-    let bestMarkAttrs: Record<string, unknown> | null = null;
+    type BestMatch = { pos: number; nodeSize: number; attrs: Record<string, unknown> };
+    let bestMatch: BestMatch | null = null;
     let bestDist = Infinity;
 
     state.doc.descendants((node, pos) => {
@@ -201,20 +200,19 @@ function makeRemoveTagAtSpanCommand(tagId: string, nearPos: number) {
         const dist = Math.max(0, pos - nearPos, nearPos - (pos + node.nodeSize));
         if (dist < bestDist) {
           bestDist = dist;
-          bestPos = pos;
-          bestNodeSize = node.nodeSize;
-          bestMarkAttrs = mark.attrs as Record<string, unknown>;
+          bestMatch = { pos, nodeSize: node.nodeSize, attrs: mark.attrs as Record<string, unknown> };
         }
       });
     });
 
-    if (bestPos === -1 || !bestMarkAttrs) return false;
+    if (!bestMatch) return false;
+    const { pos: bestPos, nodeSize: bestNodeSize, attrs: bestAttrs } = bestMatch as BestMatch;
 
-    const existingTags: TagRef[] = (bestMarkAttrs.tags as TagRef[]) ?? [];
+    const existingTags: TagRef[] = (bestAttrs.tags as TagRef[]) ?? [];
     const newTags = existingTags.filter((t) => t.tagId !== tagId);
     tr.removeMark(bestPos, bestPos + bestNodeSize, markType);
     if (newTags.length > 0) {
-      tr.addMark(bestPos, bestPos + bestNodeSize, markType.create({ ...bestMarkAttrs, tags: newTags }));
+      tr.addMark(bestPos, bestPos + bestNodeSize, markType.create({ ...bestAttrs, tags: newTags }));
     }
 
     return true;

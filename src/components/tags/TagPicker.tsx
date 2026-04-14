@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TagBadge } from './TagBadge';
 import { TagApplyDialog } from './TagApplyDialog';
-import { cn, getCategoryColor } from '@/lib/utils';
+import { cn, getCategoryColor, sortByName } from '@/lib/utils';
 import { findMatchingDreams } from '@/lib/tagUtils';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -59,9 +59,9 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
     filteredTags.forEach((tag) => {
       groups[tag.category].push(tag);
     });
-    // Sort each category alphabetically by tag name.
+    // Sort each category alphabetically using the shared sortByName utility.
     for (const key of Object.keys(groups) as TagCategory[]) {
-      groups[key].sort((a, b) => a.name.localeCompare(b.name));
+      groups[key] = sortByName(groups[key]);
     }
     return groups;
   }, [filteredTags]);
