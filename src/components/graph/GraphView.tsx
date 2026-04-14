@@ -2,7 +2,6 @@ import { useEffect, useRef, useMemo, useState } from 'react';
 import ForceGraph3D from '3d-force-graph';
 import type { NodeObject, LinkObject } from '3d-force-graph';
 import * as THREE from 'three';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { Eye, EyeOff, HelpCircle, Maximize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,23 +67,23 @@ interface GLink extends LinkObject<GNode> {
   weight: number;
 }
 
-// Glow sprite texture (radial gradient, created once)
-let _glowTexture: THREE.Texture | null = null;
-function getGlowTexture(): THREE.Texture {
-  if (_glowTexture) return _glowTexture;
-  const size = 64;
+// Label sprite texture — white text on transparent background, created per label string
+const _labelTextureCache = new Map<string, THREE.Texture>();
+function getLabelTexture(text: string): THREE.Texture {
+  if (_labelTextureCache.has(text)) return _labelTextureCache.get(text)!;
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  const fontSize = 28;
+  const padding = 8;
+  canvas.height = fontSize + padding * 2;
   const ctx = canvas.getContext('2d')!;
-  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.3, 'rgba(255,255,255,0.6)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  _glowTexture = new THREE.CanvasTexture(canvas);
-  return _glowTexture;
+  ctx.font = `${fontSize}px sans-serif`;
+  canvas.width = Math.ceil(ctx.measureText(text).width) + padding * 2;
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText(text, padding, fontSize + padding * 0.5);
+  const texture = new THREE.CanvasTexture(canvas);
+  _labelTextureCache.set(text, texture);
+  return texture;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -97,6 +96,11 @@ export function GraphView() {
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // fittedRef: guards against the empty-data onEngineStop locking out the real-data auto-fit
   const fittedRef = useRef(false);
+  // physicsReadyRef: skip d3ReheatSimulation on the first physics effect run.
+  // On mount, kapsule's updateFn (which sets state.layout) is debounced 1ms.
+  // Calling d3ReheatSimulation() before that fires sets engineRunning=true while
+  // state.layout is still undefined — the first rAF tick then crashes the animation loop.
+  const physicsReadyRef = useRef(false);
 
   const { dreams, fetchDreams } = useDreamStore();
   const { tags, fetchTags } = useTagStore();
@@ -109,8 +113,8 @@ export function GraphView() {
   const [startDate, setStartDate] = useState(oneYearAgo());
   const [endDate, setEndDate] = useState(today());
   // Defaults chosen so the 3-D force mapping produces reasonable initial layouts:
-  // repelStrength 20000 → d3 charge ≈ -60; linkStrength 0.001 → link dist ≈ 130
-  const [repelStrength, setRepelStrength] = useState(20000);
+  // repelStrength 35000 → d3 charge ≈ -105; linkStrength 0.001 → link dist ≈ 130
+  const [repelStrength, setRepelStrength] = useState(35000);
   const [linkStrength, setLinkStrength] = useState(0.001);
   const [showControls, setShowControls] = useState(false);
 
@@ -233,19 +237,18 @@ export function GraphView() {
       .nodeColor((node: NodeObject) => (node as GNode).color)
       .nodeOpacity(0.92)
       .nodeResolution(12)
-      // Custom node rendering — glow sprite so bloom looks great
+      // Custom node rendering — label sprite always visible above each node
       .nodeThreeObject((node: NodeObject) => {
         const n = node as GNode;
+        const texture = getLabelTexture(n.name);
         const spriteMat = new THREE.SpriteMaterial({
-          map: getGlowTexture(),
-          color: new THREE.Color(n.color),
+          map: texture,
           transparent: true,
           depthWrite: false,
-          blending: THREE.AdditiveBlending,
         });
         const sprite = new THREE.Sprite(spriteMat);
-        const scale = n.size * 3.5;
-        sprite.scale.set(scale, scale, 1);
+        sprite.scale.set(texture.image.width / 4, texture.image.height / 4, 1);
+        sprite.position.set(0, n.size + 4, 0);
         return sprite;
       })
       .nodeThreeObjectExtend(true)   // also render default sphere behind the sprite
@@ -254,12 +257,12 @@ export function GraphView() {
       .linkTarget('target')
       .linkColor((link: LinkObject) => {
         const l = link as GLink;
-        return l.linkType === 'tag-tag' ? '#aaaacc' : '#555577';
+        return l.linkType === 'tag-tag' ? '#ccccee' : '#8888aa';
       })
-      .linkOpacity(0.5)
+      .linkOpacity(0.8)
       .linkWidth((link: LinkObject) => {
         const l = link as GLink;
-        return l.linkType === 'tag-tag' ? Math.min(l.weight * 0.7, 3.5) : 0.4;
+        return l.linkType === 'tag-tag' ? Math.min(l.weight * 0.9, 4) : 0.8;
       })
       .linkDirectionalParticles(0)
       // Interactions
@@ -304,14 +307,6 @@ export function GraphView() {
       // Initial data
       .graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
 
-    // Add bloom pass for the constellation glow effect
-    try {
-      const bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 1.2, 0.5, 0.1);
-      graph.postProcessingComposer().addPass(bloomPass);
-    } catch (e) {
-      console.warn('Bloom pass unavailable:', e);
-    }
-
     graphRef.current = graph;
 
     // Resize observer
@@ -352,7 +347,11 @@ export function GraphView() {
     const linkDist = Math.max(30, 150 - linkStrength * 20000);
     graphRef.current.d3Force('charge')?.strength(charge);
     graphRef.current.d3Force('link')?.distance(linkDist);
-    graphRef.current.d3ReheatSimulation();
+    if (physicsReadyRef.current) {
+      graphRef.current.d3ReheatSimulation();
+    } else {
+      physicsReadyRef.current = true;
+    }
   }, [repelStrength, linkStrength]);
 
   // ── Camera controls ────────────────────────────────────────────────────────

@@ -16,7 +16,6 @@ import {
   Undo,
   Redo,
   Sparkles,
-  SpellCheck,
   Wand2,
   ImagePlus,
   X,
@@ -111,91 +110,6 @@ interface EditorDraft {
   savedAt: string;
 }
 
-// Abbreviations after which the next word should NOT be capitalised.
-// These are common title/measurement abbreviations that end with a period.
-const ABBREV_PATTERN = /\b(?:Mr|Mrs|Ms|Dr|Prof|St|Jr|Sr|vs|etc|e\.g|i\.e|approx|dept|govt|Corp|Inc|Ltd|Vol|No|Apt|Ave|Blvd|Rd)\.\s*$/i;
-
-// Module-level constants so these arrays aren't reallocated on every text node.
-const TYPOS: [RegExp, string][] = [
-  [/\bteh\b/g, 'the'],
-  [/\brecieve\b/gi, 'receive'],
-  [/\bbelive\b/gi, 'believe'],
-  [/\boccured\b/gi, 'occurred'],
-  [/\bseperate\b/gi, 'separate'],
-  [/\bdefinately\b/gi, 'definitely'],
-  [/\bdefinate\b/gi, 'definite'],
-  [/\bwierd\b/gi, 'weird'],
-  [/\bthere fore\b/gi, 'therefore'],
-];
-
-const CONTRACTIONS: [RegExp, string][] = [
-  [/\bdont\b/gi, "don't"],
-  [/\bcant\b/gi, "can't"],
-  [/\bdidnt\b/gi, "didn't"],
-  [/\bdoesnt\b/gi, "doesn't"],
-  [/\bisnt\b/gi, "isn't"],
-  [/\bwasnt\b/gi, "wasn't"],
-  [/\bwerent\b/gi, "weren't"],
-  [/\bwouldnt\b/gi, "wouldn't"],
-  [/\bcouldnt\b/gi, "couldn't"],
-  [/\bshouldnt\b/gi, "shouldn't"],
-  [/\bhavent\b/gi, "haven't"],
-  [/\bhasnt\b/gi, "hasn't"],
-  [/\bhadnt\b/gi, "hadn't"],
-  [/\bim\b/g, "I'm"],
-  [/\bive\b/g, "I've"],
-  [/\bid\b/g, "I'd"],   // lowercase only — "Id" (capitalised) is a valid Jungian term
-  [/\bIll\b/g, "I'll"],
-];
-
-/**
- * Apply grammar/spelling fixes to a single plain-text string.
- *
- * Operates on raw text content (no HTML), so it is safe to call directly
- * on ProseMirror text nodes — all existing marks are preserved by the
- * caller.  Rules:
- * - Double-space collapse and smart-quote → straight-quote normalisation.
- * - Standalone "i" → "I".
- * - Common typo corrections (see TYPOS).
- * - "wont" → "won't" only when NOT followed by "to" (preserves the adj).
- * - Contraction corrections (see CONTRACTIONS).
- * - Capitalise after sentence-ending punctuation (.!?) unless preceded by
- *   a known abbreviation (Dr., Mr., etc.).
- */
-function applyTextNodeFixes(text: string): string {
-  let t = text;
-
-  // 1. Normalise whitespace and smart punctuation
-  t = t.replace(/  +/g, ' ');
-  t = t.replace(/[\u2018\u2019]/g, "'");  // curly single → straight
-  t = t.replace(/[\u201C\u201D]/g, '"');  // curly double → straight
-  t = t.replace(/,,/g, ',');
-
-  // 2. Standalone "i" → "I"
-  t = t.replace(/\bi\b/g, 'I');
-
-  // 3. Common typos
-  for (const [pattern, replacement] of TYPOS) {
-    t = t.replace(pattern, replacement);
-  }
-
-  // 4. "wont" → "won't" (context-aware: not when followed by "to")
-  t = t.replace(/\bwont\b(?!\s+to\b)/gi, "won't");
-
-  // 5. Contractions
-  for (const [pattern, replacement] of CONTRACTIONS) {
-    t = t.replace(pattern, replacement);
-  }
-
-  // 6. Capitalise after sentence-ending punctuation within this text node
-  t = t.replace(/([.!?]\s+)([a-z])/g, (match, punct, letter, offset) => {
-    const preceding = t.slice(0, offset);
-    if (ABBREV_PATTERN.test(preceding)) return match;
-    return punct + letter.toUpperCase();
-  });
-
-  return t;
-}
 
 function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
   const associations: WordTagAssociation[] = [];
@@ -714,38 +628,6 @@ export function DreamEditor() {
     applyAutoHighlights(matched);
   };
 
-  const handleGrammarFix = () => {
-    if (!editor) return;
-    const { state } = editor;
-    const { tr, schema } = state;
-
-    // Walk every text node in the document, apply fixes in-place.
-    // Using tr.mapping.map keeps positions correct as earlier replacements
-    // shift subsequent offsets.  Marks on each node are preserved verbatim.
-    state.doc.descendants((node, pos, parent, index) => {
-      if (!node.isText || !node.text) return;
-
-      let fixed = applyTextNodeFixes(node.text);
-
-      // Capitalise the first letter of the first text node in each block
-      // paragraph (e.g. a fresh line the user started lowercase).
-      if (parent?.isBlock && index === 0 && fixed.length > 0 && /[a-z]/.test(fixed[0])) {
-        fixed = fixed[0].toUpperCase() + fixed.slice(1);
-      }
-
-      if (fixed === node.text) return;
-
-      const mappedFrom = tr.mapping.map(pos);
-      const mappedTo   = tr.mapping.map(pos + node.text.length);
-      tr.replaceWith(mappedFrom, mappedTo, schema.text(fixed, node.marks));
-    });
-
-    // Only dispatch — and trigger onUpdate / draft-save — if something changed.
-    if (tr.docChanged) {
-      editor.view.dispatch(tr);
-    }
-  };
-
   const handleAIAnalysis = async () => {
     if (!editor) return;
     const dreamText = editor.getText().trim();
@@ -1135,10 +1017,6 @@ export function DreamEditor() {
             </div>
             <div className="border rounded-lg">
               <div className="flex items-center gap-1 p-2 border-b bg-muted/50 flex-wrap">
-                <ToolbarButton onClick={handleGrammarFix} isActive={false}>
-                  <SpellCheck className="h-4 w-4" />
-                </ToolbarButton>
-                <Separator orientation="vertical" className="h-6 mx-1" />
                 <ToolbarButton
                   onClick={() => editor?.chain().focus().toggleBold().run()}
                   isActive={editor?.isActive('bold')}
