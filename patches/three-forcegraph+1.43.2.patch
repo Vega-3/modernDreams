@@ -1,0 +1,12 @@
+diff --git a/node_modules/three-forcegraph/dist/three-forcegraph.mjs b/node_modules/three-forcegraph/dist/three-forcegraph.mjs
+index ddecc71..4852b85 100644
+--- a/node_modules/three-forcegraph/dist/three-forcegraph.mjs
++++ b/node_modules/three-forcegraph/dist/three-forcegraph.mjs
+@@ -730,6 +730,7 @@ var ForceGraph = Kapsule({
+           state.engineRunning = false; // Stop ticking graph
+           state.onEngineStop();
+         } else {
++          if (!state.layout) return; // guard: layout not yet initialised (kapsule debounce still pending)
+           state.layout[isD3Sim ? 'tick' : 'step'](); // Tick it
+           state.onEngineTick();
+         }
