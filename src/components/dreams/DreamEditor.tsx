@@ -65,7 +65,7 @@ function makeInlineTagExtension(allTagsRef: React.MutableRefObject<Tag[]>) {
       return [
         new InputRule({
           find: /\[\[([^\]]+)\]\]$/,
-          handler({ state, range, match }) {
+          handler({ state, range, match, tr }) {
             const tagName = match[1]?.trim();
             if (!tagName) return;
             const tag = allTagsRef.current.find(
@@ -74,7 +74,8 @@ function makeInlineTagExtension(allTagsRef: React.MutableRefObject<Tag[]>) {
             if (!tag) return;
             const markType = state.schema.marks[markName];
             if (!markType) return;
-            const { tr } = state;
+            // Use TipTap's `tr` (passed as parameter) — NOT state.tr, which
+            // creates a separate transaction that TipTap never dispatches.
             tr.replaceWith(range.from, range.to, state.schema.text(tag.name));
             tr.addMark(
               range.from,
@@ -85,7 +86,6 @@ function makeInlineTagExtension(allTagsRef: React.MutableRefObject<Tag[]>) {
               }),
             );
             tr.removeStoredMark(markType);
-            // Dispatch is handled by TipTap's InputRule system
           },
         }),
       ];
@@ -845,6 +845,7 @@ export function DreamEditor() {
           <button
             key={tag.tagId}
             title={`Remove "${tag.tagName}" from this text`}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleRemoveTagFromSpan(tag.tagId)}
             style={{ backgroundColor: tag.tagColor }}
             className="w-5 h-5 rounded-full flex items-center justify-center shadow-md opacity-90 hover:opacity-100 transition-opacity"
@@ -856,7 +857,18 @@ export function DreamEditor() {
       document.body
     )}
     <Dialog open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-3xl max-h-[90vh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          // The tag-remove overlay is rendered via createPortal to document.body,
+          // outside DialogContent's DOM tree. Without this guard, Radix treats a
+          // click on the overlay as an "outside click" and closes the dialog before
+          // the mark-removal command runs — making the X button appear to do nothing.
+          if ((e.target as Element | null)?.closest?.('[data-tag-remove-overlay]')) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{editingDreamId ? 'Edit Dream' : 'New Dream Entry'}</DialogTitle>
         </DialogHeader>
