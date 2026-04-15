@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TagBadge } from './TagBadge';
 import { TagApplyDialog } from './TagApplyDialog';
-import { cn, getCategoryColor } from '@/lib/utils';
+import { cn, getCategoryColor, sortByName } from '@/lib/utils';
 import { findMatchingDreams } from '@/lib/tagUtils';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
@@ -59,6 +59,10 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
     filteredTags.forEach((tag) => {
       groups[tag.category].push(tag);
     });
+    // Sort each category alphabetically using the shared sortByName utility.
+    for (const key of Object.keys(groups) as TagCategory[]) {
+      groups[key] = sortByName(groups[key]);
+    }
     return groups;
   }, [filteredTags]);
 
@@ -128,7 +132,7 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
               Add tags
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-0" align="start">
+          <PopoverContent className="w-[480px] p-0" align="start">
             <div className="p-2 border-b">
               <Input
                 placeholder="Search or create tag..."
@@ -138,7 +142,7 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
               />
             </div>
 
-            <ScrollArea className="h-64">
+            <ScrollArea className="h-80">
               <div className="p-2 space-y-4">
                 {/* Create new tag option */}
                 {showCreateOption && (
@@ -168,7 +172,7 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
                   </div>
                 )}
 
-                {/* Existing tags by category */}
+                {/* Existing tags by category — two-column grid, sorted alphabetically */}
                 {categories.map((category) => {
                   const categoryTags = groupedTags[category.id];
                   if (categoryTags.length === 0) return null;
@@ -176,7 +180,7 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
                   return (
                     <div key={category.id}>
                       <p className="text-xs text-muted-foreground px-2 mb-1">{category.label}</p>
-                      <div className="space-y-1">
+                      <div className="grid grid-cols-2 gap-0.5">
                         {categoryTags.map((tag) => (
                           <button
                             key={tag.id}
@@ -184,20 +188,16 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
                             onClick={() => toggleTag(tag)}
                             className={cn(
                               'flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm hover:bg-accent transition-colors',
+                              isSelected(tag) && 'bg-accent/60',
                             )}
                           >
                             <span
                               className="w-3 h-3 rounded-full flex-shrink-0"
                               style={{ backgroundColor: tag.color }}
                             />
-                            <span className="flex-1 text-left">{tag.name}</span>
-                            {tag.aliases.length > 0 && (
-                              <span className="text-xs text-muted-foreground truncate max-w-[80px]">
-                                +{tag.aliases.length} alias{tag.aliases.length !== 1 ? 'es' : ''}
-                              </span>
-                            )}
+                            <span className="flex-1 text-left truncate">{tag.name}</span>
                             {isSelected(tag) && (
-                              <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                              <Check className="h-3.5 w-3.5 text-primary flex-shrink-0" />
                             )}
                           </button>
                         ))}

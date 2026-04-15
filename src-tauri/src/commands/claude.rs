@@ -188,6 +188,24 @@ pub async fn transcribe_handwriting_claude(
 
 // ─── Dream analysis ────────────────────────────────────────────────────────────
 
+/// Condensed Jungian archetype reference injected into the analyse prompt.
+/// Sourced from public/ARCHETYPES.md — update both if archetypes change.
+const ARCHETYPES_REFERENCE: &str = r#"
+JUNGIAN ARCHETYPES REFERENCE (use only when clearly present in the dream):
+1. The Self (gold) — wholeness, mandalas, luminous figures, divine encounters, circles/quaternity
+2. The Shadow (black) — dark pursuer, sinister double, criminal/outcast figure, being chased
+3. The Anima/Animus (magenta) — opposite-sex figures that feel fated/uncanny, lover/guide/witch/hero
+4. The Persona (red) — losing clothes, wearing masks/uniforms, social embarrassment, performing
+5. The Hero (silver) — quests, battles with monsters, rescuing others, overcoming obstacles
+6. The Great Mother (pink) — nurturing/devouring mother, earth, ocean, caves, cauldrons, ancient women
+7. The Wise Old Man (royal blue) — sage, guru, prophet, elder bearing counsel, wizard, grandfather
+8. The Trickster (orange) — clown, shapeshifter, impossible comedy, reversals, absurdist humour
+9. The Child (baby blue) — miraculous/endangered infant, gifted child, rebirth symbols, new beginnings
+10. The Maiden/Kore (light green) — innocent woman in danger, descent/abduction theme, threshold figures
+11. The Father (dark green) — authority figures, kings, judges, law, sky/sun symbols, institutional structures
+12. The Lover (dark red) — romantic encounters, intense beauty, passionate creative work, erotic imagery
+"#;
+
 #[derive(Serialize, Deserialize)]
 pub struct DreamAnalysisResult {
     /// Tag names Claude recommends applying (subset of available_tags, plus new
@@ -240,10 +258,12 @@ AVAILABLE TAGS (use these names when assigning; you may suggest genuinely new na
 if no existing tag fits):
 {tags_json}
 
+{ARCHETYPES_REFERENCE}
+
 Return ONLY a valid JSON object with exactly these two keys:
 {{
   "suggested_tag_names": ["tag_name_1", "tag_name_2", ...],
-  "theme_suggestions": "A concise paragraph of thematic observations, symbolic interpretations, and questions worth reflecting on. Write in the analyst voice — direct and exploratory."
+  "theme_suggestions": "A concise paragraph of thematic observations, symbolic interpretations, and questions worth reflecting on. Write in the analyst voice — direct and exploratory. ONLY if archetypes are clearly and unmistakably present in this dream, name them and explain why at the end of the paragraph — otherwise omit archetype references entirely."
 }}
 
 Rules for suggested_tag_names:

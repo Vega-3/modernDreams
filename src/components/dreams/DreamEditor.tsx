@@ -174,6 +174,51 @@ function makeRemoveTagCommand(tagId: string, from: number, to: number) {
   };
 }
 
+/**
+ * TipTap command that removes a tag from the single highlighted span nearest to
+ * `nearPos`.  This is used for the hover-X button: posAtDOM can give slightly
+ * inexact positions for mark-rendered spans, so searching for the closest node
+ * is more reliable than a strict nodesBetween(from, to) range check.
+ */
+function makeRemoveTagAtSpanCommand(tagId: string, nearPos: number) {
+  return ({ tr, state }: { tr: import('@tiptap/pm/state').Transaction; state: import('@tiptap/pm/state').EditorState }) => {
+    const markType = state.schema.marks[TAG_HIGHLIGHT];
+    if (!markType) return false;
+
+    // Find the text node with this tagId that is closest to nearPos.
+    type BestMatch = { pos: number; nodeSize: number; attrs: Record<string, unknown> };
+    let bestMatch: BestMatch | null = null;
+    let bestDist = Infinity;
+
+    state.doc.descendants((node, pos) => {
+      if (!node.isText) return;
+      node.marks.forEach((mark) => {
+        if (mark.type !== markType) return;
+        const tags: TagRef[] = (mark.attrs.tags as TagRef[]) ?? [];
+        if (!tags.some((t) => t.tagId === tagId)) return;
+        // Distance: how far the nearest edge of [pos, pos+size] is from nearPos.
+        const dist = Math.max(0, pos - nearPos, nearPos - (pos + node.nodeSize));
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestMatch = { pos, nodeSize: node.nodeSize, attrs: mark.attrs as Record<string, unknown> };
+        }
+      });
+    });
+
+    if (!bestMatch) return false;
+    const { pos: bestPos, nodeSize: bestNodeSize, attrs: bestAttrs } = bestMatch as BestMatch;
+
+    const existingTags: TagRef[] = (bestAttrs.tags as TagRef[]) ?? [];
+    const newTags = existingTags.filter((t) => t.tagId !== tagId);
+    tr.removeMark(bestPos, bestPos + bestNodeSize, markType);
+    if (newTags.length > 0) {
+      tr.addMark(bestPos, bestPos + bestNodeSize, markType.create({ ...bestAttrs, tags: newTags }));
+    }
+
+    return true;
+  };
+}
+
 function removeTagMarksFromEditor(editor: Editor, tagId: string) {
   if (!editor || (editor as Editor & { isDestroyed?: boolean }).isDestroyed) return;
   try {
@@ -449,12 +494,17 @@ export function DreamEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, editorOpen]);
 
-  /** Remove a specific tag from just the hovered span (identified by its doc range). */
+  /** Remove a specific tag from just the hovered span.
+   *
+   * Uses makeRemoveTagAtSpanCommand (nearest-node search) rather than the strict
+   * nodesBetween approach: posAtDOM can return slightly inexact positions for
+   * mark-rendered spans, so anchoring by proximity is more reliable.
+   */
   const handleRemoveTagFromSpan = (tagId: string) => {
     if (!editor || !tagHoverInfo) return;
     try {
       editor.chain()
-        .command(makeRemoveTagCommand(tagId, tagHoverInfo.from, tagHoverInfo.to))
+        .command(makeRemoveTagAtSpanCommand(tagId, tagHoverInfo.from))
         .run();
     } catch (e) {
       console.warn('Failed to remove tag from span:', e);
