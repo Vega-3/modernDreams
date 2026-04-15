@@ -1279,6 +1279,18 @@ export function DreamEditor() {
               />
             </div>
           </div>
+
+          {/* Analysis Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="analysis-notes">Analysis Notes</Label>
+            <Textarea
+              id="analysis-notes"
+              placeholder="Your reflections, interpretations, and insights about this dream..."
+              value={analysisNotes}
+              onChange={(e) => setAnalysisNotes(e.target.value)}
+              className="min-h-[80px]"
+            />
+          </div>
         </div>
 
         <DialogFooter>
