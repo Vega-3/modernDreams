@@ -142,91 +142,34 @@ function extractWordTagAssociations(editor: Editor): WordTagAssociation[] {
 }
 
 /**
- * TipTap command that removes one tag from all tagHighlight marks in [from, to].
- * Pass from=0, to=doc.content.size to operate on the whole document.
- *
- * Using the command API (not editor.view.dispatch) keeps the transaction inside
- * TipTap's reconciliation layer and prevents uncaught errors in React's cycle.
+ * Remove one tag from all tagHighlight marks across the entire document.
+ * Uses editor.view.dispatch so the transaction is always committed.
  */
-function makeRemoveTagCommand(tagId: string, from: number, to: number) {
-  return ({ tr, state }: { tr: import('@tiptap/pm/state').Transaction; state: import('@tiptap/pm/state').EditorState }) => {
+function removeTagMarksFromEditor(editor: Editor, tagId: string) {
+  if (!editor || (editor as Editor & { isDestroyed?: boolean }).isDestroyed) return;
+  try {
+    const { state, view } = editor;
     const markType = state.schema.marks[TAG_HIGHLIGHT];
-    if (!markType) return false;
+    if (!markType) return;
+    const docSize = state.doc.content.size;
+    if (docSize === 0) return;
 
-    let changed = false;
-    state.doc.nodesBetween(from, to, (node, pos) => {
+    const tr = state.tr;
+    state.doc.nodesBetween(0, docSize, (node, pos) => {
       if (!node.isText) return;
       node.marks.forEach((mark) => {
         if (mark.type !== markType) return;
         const existingTags: TagRef[] = mark.attrs.tags ?? [];
         if (!existingTags.some((t) => t.tagId === tagId)) return;
-
         const newTags = existingTags.filter((t) => t.tagId !== tagId);
         tr.removeMark(pos, pos + node.nodeSize, markType);
         if (newTags.length > 0) {
           tr.addMark(pos, pos + node.nodeSize, markType.create({ ...mark.attrs, tags: newTags }));
         }
-        changed = true;
       });
     });
 
-    return changed;
-  };
-}
-
-/**
- * TipTap command that removes a tag from the single highlighted span nearest to
- * `nearPos`.  This is used for the hover-X button: posAtDOM can give slightly
- * inexact positions for mark-rendered spans, so searching for the closest node
- * is more reliable than a strict nodesBetween(from, to) range check.
- */
-function makeRemoveTagAtSpanCommand(tagId: string, nearPos: number) {
-  return ({ tr, state }: { tr: import('@tiptap/pm/state').Transaction; state: import('@tiptap/pm/state').EditorState }) => {
-    const markType = state.schema.marks[TAG_HIGHLIGHT];
-    if (!markType) return false;
-
-    // Find the text node with this tagId that is closest to nearPos.
-    type BestMatch = { pos: number; nodeSize: number; attrs: Record<string, unknown> };
-    let bestMatch: BestMatch | null = null;
-    let bestDist = Infinity;
-
-    state.doc.descendants((node, pos) => {
-      if (!node.isText) return;
-      node.marks.forEach((mark) => {
-        if (mark.type !== markType) return;
-        const tags: TagRef[] = (mark.attrs.tags as TagRef[]) ?? [];
-        if (!tags.some((t) => t.tagId === tagId)) return;
-        // Distance: how far the nearest edge of [pos, pos+size] is from nearPos.
-        const dist = Math.max(0, pos - nearPos, nearPos - (pos + node.nodeSize));
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestMatch = { pos, nodeSize: node.nodeSize, attrs: mark.attrs as Record<string, unknown> };
-        }
-      });
-    });
-
-    if (!bestMatch) return false;
-    const { pos: bestPos, nodeSize: bestNodeSize, attrs: bestAttrs } = bestMatch as BestMatch;
-
-    const existingTags: TagRef[] = (bestAttrs.tags as TagRef[]) ?? [];
-    const newTags = existingTags.filter((t) => t.tagId !== tagId);
-    tr.removeMark(bestPos, bestPos + bestNodeSize, markType);
-    if (newTags.length > 0) {
-      tr.addMark(bestPos, bestPos + bestNodeSize, markType.create({ ...bestAttrs, tags: newTags }));
-    }
-
-    return true;
-  };
-}
-
-function removeTagMarksFromEditor(editor: Editor, tagId: string) {
-  if (!editor || (editor as Editor & { isDestroyed?: boolean }).isDestroyed) return;
-  try {
-    const docSize = editor.state.doc.content.size;
-    if (docSize === 0) return;
-    editor.chain()
-      .command(makeRemoveTagCommand(tagId, 0, docSize))
-      .run();
+    if (tr.docChanged) view.dispatch(tr);
   } catch (e) {
     console.warn('Failed to remove tag marks:', e);
   }
@@ -496,16 +439,49 @@ export function DreamEditor() {
 
   /** Remove a specific tag from just the hovered span.
    *
-   * Uses makeRemoveTagAtSpanCommand (nearest-node search) rather than the strict
-   * nodesBetween approach: posAtDOM can return slightly inexact positions for
-   * mark-rendered spans, so anchoring by proximity is more reliable.
+   * posAtDOM can give slightly inexact positions for mark-rendered spans, so we
+   * scan the full document via descendants() and pick the closest matching node.
+   * We use editor.view.dispatch(tr) directly — TipTap's chain().command() only
+   * commits the transaction when dispatch() is explicitly called inside the
+   * command function, and omitting that call silently discards the changes.
    */
   const handleRemoveTagFromSpan = (tagId: string) => {
     if (!editor || !tagHoverInfo) return;
     try {
-      editor.chain()
-        .command(makeRemoveTagAtSpanCommand(tagId, tagHoverInfo.from))
-        .run();
+      const { state, view } = editor;
+      const markType = state.schema.marks[TAG_HIGHLIGHT];
+      if (!markType) { setTagHoverInfo(null); return; }
+
+      type BestMatch = { pos: number; nodeSize: number; attrs: Record<string, unknown> };
+      let bestMatch: BestMatch | null = null;
+      let bestDist = Infinity;
+      const nearPos = tagHoverInfo.from;
+
+      state.doc.descendants((node, pos) => {
+        if (!node.isText) return;
+        node.marks.forEach((mark) => {
+          if (mark.type !== markType) return;
+          const tags: TagRef[] = (mark.attrs.tags as TagRef[]) ?? [];
+          if (!tags.some((t) => t.tagId === tagId)) return;
+          const dist = Math.max(0, pos - nearPos, nearPos - (pos + node.nodeSize));
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestMatch = { pos, nodeSize: node.nodeSize, attrs: mark.attrs as Record<string, unknown> };
+          }
+        });
+      });
+
+      if (bestMatch) {
+        const { pos: bestPos, nodeSize: bestNodeSize, attrs: bestAttrs } = bestMatch as BestMatch;
+        const existingTags: TagRef[] = (bestAttrs.tags as TagRef[]) ?? [];
+        const newTags = existingTags.filter((t) => t.tagId !== tagId);
+        const tr = state.tr;
+        tr.removeMark(bestPos, bestPos + bestNodeSize, markType);
+        if (newTags.length > 0) {
+          tr.addMark(bestPos, bestPos + bestNodeSize, markType.create({ ...bestAttrs, tags: newTags }));
+        }
+        view.dispatch(tr);
+      }
     } catch (e) {
       console.warn('Failed to remove tag from span:', e);
     }
