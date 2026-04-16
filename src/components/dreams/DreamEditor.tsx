@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -269,8 +268,10 @@ export function DreamEditor() {
   // ── Hover-X inline tag removal ────────────────────────────────────────────
   // Tracks which tagged span is currently hovered so we can show a small X
   // overlay that removes the tag from just that block of text.
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const [tagHoverInfo, setTagHoverInfo] = useState<{
-    rect: DOMRect;
+    relLeft: number;
+    relTop: number;
     tags: TagRef[];
     from: number;
     to: number;
@@ -471,7 +472,14 @@ export function DreamEditor() {
         const textLen = span.textContent?.length ?? 0;
         const domPosEnd = domPos + textLen;
         const rect = span.getBoundingClientRect();
-        setTagHoverInfo({ rect, tags, from: domPos, to: domPosEnd });
+        const containerRect = editorContainerRef.current?.getBoundingClientRect();
+        if (!containerRect) return;
+        // Store container-relative coords so the overlay can be position:absolute
+        // inside the editor container — keeping it inside the dialog DOM tree and
+        // avoiding Radix's outside-click detection entirely.
+        const relLeft = rect.right - containerRect.left - 10;
+        const relTop = rect.top - containerRect.top - 10;
+        setTagHoverInfo({ relLeft, relTop, tags, from: domPos, to: domPosEnd });
       } catch {
         // posAtDOM can fail if the span is outside the ProseMirror content
       }
@@ -871,53 +879,9 @@ export function DreamEditor() {
 
   return (
     <>
-    {/* Hover-X overlay — rendered in a portal so it sits above the dialog */}
-    {tagHoverInfo && createPortal(
-      <div
-        data-tag-remove-overlay=""
-        style={{
-          position: 'fixed',
-          left: tagHoverInfo.rect.right - 10,
-          top: tagHoverInfo.rect.top - 10,
-          zIndex: 9999,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-        }}
-        onMouseEnter={() => {
-          if (tagHoverTimeoutRef.current) clearTimeout(tagHoverTimeoutRef.current);
-        }}
-        onMouseLeave={() => {
-          tagHoverTimeoutRef.current = setTimeout(() => setTagHoverInfo(null), 120);
-        }}
-      >
-        {tagHoverInfo.tags.map((tag) => (
-          <button
-            key={tag.tagId}
-            title={`Remove "${tag.tagName}" from this text`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleRemoveTagFromSpan(tag.tagId)}
-            style={{ backgroundColor: tag.tagColor }}
-            className="w-5 h-5 rounded-full flex items-center justify-center shadow-md opacity-90 hover:opacity-100 transition-opacity"
-          >
-            <X className="h-2.5 w-2.5 text-white" strokeWidth={3} />
-          </button>
-        ))}
-      </div>,
-      document.body
-    )}
     <Dialog open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
       <DialogContent
         className="max-w-3xl max-h-[90vh] overflow-y-auto"
-        onPointerDownOutside={(e) => {
-          // The tag-remove overlay is rendered via createPortal to document.body,
-          // outside DialogContent's DOM tree. Without this guard, Radix treats a
-          // click on the overlay as an "outside click" and closes the dialog before
-          // the mark-removal command runs — making the X button appear to do nothing.
-          if ((e.target as Element | null)?.closest?.('[data-tag-remove-overlay]')) {
-            e.preventDefault();
-          }
-        }}
       >
         <DialogHeader>
           <DialogTitle>{editingDreamId ? 'Edit Dream' : 'New Dream Entry'}</DialogTitle>
@@ -1172,7 +1136,7 @@ export function DreamEditor() {
                   </button>
                 </div>
               )}
-              <div className="p-4 relative">
+              <div className="p-4 relative" ref={editorContainerRef}>
                 {editor && (selectedTags.length > 0 || archetypes.length > 0) && (
                   <BubbleMenu
                     editor={editor}
@@ -1227,6 +1191,44 @@ export function DreamEditor() {
                   </BubbleMenu>
                 )}
                 <EditorContent editor={editor} />
+                {/* Hover-X overlay — absolute inside the container so it stays
+                    inside the dialog DOM tree and never triggers Radix's
+                    outside-click detection. */}
+                {tagHoverInfo && (
+                  <div
+                    data-tag-remove-overlay=""
+                    style={{
+                      position: 'absolute',
+                      left: tagHoverInfo.relLeft,
+                      top: tagHoverInfo.relTop,
+                      zIndex: 10,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      pointerEvents: 'auto',
+                    }}
+                    onMouseEnter={() => {
+                      if (tagHoverTimeoutRef.current) clearTimeout(tagHoverTimeoutRef.current);
+                    }}
+                    onMouseLeave={() => {
+                      tagHoverTimeoutRef.current = setTimeout(() => setTagHoverInfo(null), 120);
+                    }}
+                  >
+                    {tagHoverInfo.tags.map((tag) => (
+                      <button
+                        key={tag.tagId}
+                        type="button"
+                        title={`Remove "${tag.tagName}" from this text`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleRemoveTagFromSpan(tag.tagId)}
+                        style={{ backgroundColor: tag.tagColor }}
+                        className="w-5 h-5 rounded-full flex items-center justify-center shadow-md opacity-90 hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
