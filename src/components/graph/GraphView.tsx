@@ -2,8 +2,8 @@ import { useEffect, useRef, useMemo, useState } from 'react';
 import ForceGraph3D from '3d-force-graph';
 import type { NodeObject, LinkObject } from '3d-force-graph';
 import * as THREE from 'three';
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-const { forceCollide } = require('d3-force-3d') as any;
+// @ts-ignore — d3-force-3d ships no type declarations; it is a transitive dep of 3d-force-graph
+import { forceCollide } from 'd3-force-3d';
 import { Eye, EyeOff, HelpCircle, Maximize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +69,16 @@ interface GLink extends LinkObject<GNode> {
   weight: number;
 }
 
+// ── Focus-highlight helpers ───────────────────────────────────────────────────
+
+/** Return a very dim version of a hex colour for non-focused nodes. */
+function dimColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgb(${Math.round(r * 0.08)},${Math.round(g * 0.08)},${Math.round(b * 0.08)})`;
+}
+
 // Label sprite texture — glowing white text on transparent background, created per label string
 const _labelTextureCache = new Map<string, THREE.Texture>();
 function getLabelTexture(text: string): THREE.Texture {
@@ -114,6 +124,14 @@ export function GraphView() {
   // Calling d3ReheatSimulation() before that fires sets engineRunning=true while
   // state.layout is still undefined — the first rAF tick then crashes the animation loop.
   const physicsReadyRef = useRef(false);
+
+  // Focus-highlight state — stored in refs so graph callbacks always read current values.
+  const focusedNodeIdRef = useRef<string | null>(null);
+  const neighborSetRef   = useRef<Set<string>>(new Set());
+  // Map of nodeId → SpriteMaterial so we can dim labels for non-neighbours directly.
+  const spriteMatMapRef  = useRef<Map<string, THREE.SpriteMaterial>>(new Map());
+  // Stored so the graphData reactive effect can clear focus without prop-drilling.
+  const clearFocusRef    = useRef<() => void>(() => {});
 
   const { dreams, fetchDreams } = useDreamStore();
   const { tags, fetchTags } = useTagStore();
@@ -261,6 +279,7 @@ export function GraphView() {
           depthWrite: false,
           depthTest: false,   // render on top of everything — labels cut through edges & nodes
         });
+        spriteMatMapRef.current.set(n.id, spriteMat);
         const sprite = new THREE.Sprite(spriteMat);
         sprite.renderOrder = 999;
         const img = texture.image as HTMLCanvasElement;
@@ -283,8 +302,48 @@ export function GraphView() {
         const l = link as GLink;
         return l.linkType === 'tag-tag' ? Math.min(l.weight * 0.6, 2.5) : 0.5;
       })
-      .linkDirectionalParticles(0)
-      // Interactions
+      .linkDirectionalParticles(0);
+
+    // ── Focus-highlight helpers (close over `graph`) ───────────────────────
+    const applyFocusColors = () => {
+      const focused = focusedNodeIdRef.current;
+      const neighbors = neighborSetRef.current;
+
+      // Re-register with a new function reference so kapsule detects a change.
+      graph.nodeColor((node: NodeObject) => {
+        const n = node as GNode;
+        return !focused || neighbors.has(n.id) ? n.color : dimColor(n.color);
+      });
+
+      graph.linkColor((link: LinkObject) => {
+        const l = link as GLink;
+        const src = typeof l.source === 'object' ? (l.source as GNode).id : String(l.source);
+        const tgt = typeof l.target === 'object' ? (l.target as GNode).id : String(l.target);
+        const isNeighborEdge = !focused || neighbors.has(src) || neighbors.has(tgt);
+        return isNeighborEdge
+          ? (l.linkType === 'tag-tag' ? '#ccccee' : '#8888aa')
+          : '#0d0d12';
+      });
+
+      // Boost active edges' opacity while washing out dead ones via colour above.
+      graph.linkOpacity(focused ? 0.65 : 0.35);
+
+      // Dim sprite labels directly (avoids re-building node meshes).
+      for (const [nodeId, mat] of spriteMatMapRef.current) {
+        mat.opacity = !focused || neighbors.has(nodeId) ? 1 : 0.07;
+        mat.needsUpdate = true;
+      }
+    };
+
+    const clearFocus = () => {
+      focusedNodeIdRef.current = null;
+      neighborSetRef.current = new Set();
+      applyFocusColors();
+    };
+    clearFocusRef.current = clearFocus;
+
+    // ── Interactions ────────────────────────────────────────────────────────
+    graph
       .onNodeClick((node: NodeObject, _event: MouseEvent) => {
         const n = node as GNode;
         if (n.nodeType === 'dream') {
@@ -297,6 +356,26 @@ export function GraphView() {
           }
           clickTimerRef.current = setTimeout(() => { clickTimerRef.current = null; }, 280);
         }
+
+        // Toggle focus on this node
+        if (focusedNodeIdRef.current === n.id) {
+          clearFocus();
+        } else {
+          focusedNodeIdRef.current = n.id;
+          const neighbors = new Set<string>([n.id]);
+          const { links } = graph.graphData() as { nodes: GNode[]; links: GLink[] };
+          for (const link of links) {
+            const src = typeof link.source === 'object'
+              ? (link.source as GNode).id : String(link.source);
+            const tgt = typeof link.target === 'object'
+              ? (link.target as GNode).id : String(link.target);
+            if (src === n.id) neighbors.add(tgt);
+            if (tgt === n.id) neighbors.add(src);
+          }
+          neighborSetRef.current = neighbors;
+          applyFocusColors();
+        }
+
         // Fly camera towards clicked node
         const nx = (n as unknown as { x?: number }).x ?? 0;
         const ny = (n as unknown as { y?: number }).y ?? 0;
@@ -311,6 +390,7 @@ export function GraphView() {
         );
       })
       .onBackgroundClick(() => {
+        clearFocus();
         graph.zoomToFit(600, 60);
       })
       // Auto-fit once the simulation settles — but only when we have real nodes.
@@ -358,6 +438,9 @@ export function GraphView() {
   // ── Reactively update graph data ──────────────────────────────────────────
   useEffect(() => {
     if (!graphRef.current) return;
+    // Clear focus — node IDs may have changed, old neighbour set is stale.
+    spriteMatMapRef.current.clear();
+    clearFocusRef.current();
     // Reset so onEngineStop will trigger a fresh zoomToFit once the simulation settles
     fittedRef.current = false;
     graphRef.current.graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
@@ -486,9 +569,10 @@ export function GraphView() {
                 <p className="text-white/60">Left-drag &nbsp;—&nbsp; <span className="text-white/90">Rotate</span></p>
                 <p className="text-white/60">Right-drag &nbsp;—&nbsp; <span className="text-white/90">Pan</span></p>
                 <p className="text-white/60">Scroll &nbsp;—&nbsp; <span className="text-white/90">Zoom</span></p>
-                <p className="text-white/60">Click node &nbsp;—&nbsp; <span className="text-white/90">Fly to it</span></p>
+                <p className="text-white/60">Click node &nbsp;—&nbsp; <span className="text-white/90">Focus neighbours</span></p>
+                <p className="text-white/60">Click again &nbsp;—&nbsp; <span className="text-white/90">Clear focus</span></p>
                 <p className="text-white/60">Dbl-click dream &nbsp;—&nbsp; <span className="text-white/90">Open editor</span></p>
-                <p className="text-white/60">Click background &nbsp;—&nbsp; <span className="text-white/90">Fit all</span></p>
+                <p className="text-white/60">Click background &nbsp;—&nbsp; <span className="text-white/90">Clear focus &amp; fit</span></p>
               </div>
             )}
           </div>
