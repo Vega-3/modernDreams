@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Hash, ArrowUp, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Hash, ArrowUp, X, Scissors } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { TagBadge } from '@/components/tags/TagBadge';
 import { TagApplyDialog } from '@/components/tags/TagApplyDialog';
+import { SplitTagDialog } from '@/components/tags/SplitTagDialog';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
@@ -155,6 +156,9 @@ export function TagsPage() {
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [pendingApplyTag, setPendingApplyTag] = useState<Tag | null>(null);
   const [matchingDreams, setMatchingDreams] = useState<Dream[]>([]);
+
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [splittingTag, setSplittingTag] = useState<Tag | null>(null);
 
   useEffect(() => {
     fetchTags();
@@ -391,14 +395,25 @@ export function TagsPage() {
                             size="icon"
                             className="h-7 w-7"
                             onClick={() => openEditor(tag)}
+                            title="Edit tag"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-7 w-7"
+                            onClick={() => { setSplittingTag(tag); setSplitDialogOpen(true); }}
+                            title="Split into sub-categories"
+                          >
+                            <Scissors className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-7 w-7 text-destructive"
                             onClick={() => handleDelete(tag)}
+                            title="Delete tag"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -662,6 +677,13 @@ export function TagsPage() {
         matchingDreams={matchingDreams}
         onApplied={fetchDreams}
         variant="updated"
+      />
+
+      <SplitTagDialog
+        open={splitDialogOpen}
+        onOpenChange={setSplitDialogOpen}
+        tag={splittingTag}
+        onSplit={() => { fetchTags(); fetchDreams(); }}
       />
     </div>
   );

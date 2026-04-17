@@ -2,6 +2,8 @@ import { useEffect, useRef, useMemo, useState } from 'react';
 import ForceGraph3D from '3d-force-graph';
 import type { NodeObject, LinkObject } from '3d-force-graph';
 import * as THREE from 'three';
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const { forceCollide } = require('d3-force-3d') as any;
 import { Eye, EyeOff, HelpCircle, Maximize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,20 +69,31 @@ interface GLink extends LinkObject<GNode> {
   weight: number;
 }
 
-// Label sprite texture — white text on transparent background, created per label string
+// Label sprite texture — glowing white text on transparent background, created per label string
 const _labelTextureCache = new Map<string, THREE.Texture>();
 function getLabelTexture(text: string): THREE.Texture {
   if (_labelTextureCache.has(text)) return _labelTextureCache.get(text)!;
   const canvas = document.createElement('canvas');
-  const fontSize = 28;
-  const padding = 8;
-  canvas.height = fontSize + padding * 2;
+  const fontSize = 30;
+  const padding = 10;
+  // Extra vertical padding to give room for the glow blur without clipping
+  canvas.height = fontSize + padding * 3;
   const ctx = canvas.getContext('2d')!;
   ctx.font = `${fontSize}px sans-serif`;
-  canvas.width = Math.ceil(ctx.measureText(text).width) + padding * 2;
+  canvas.width = Math.ceil(ctx.measureText(text).width) + padding * 2 + 16;
   ctx.font = `${fontSize}px sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText(text, padding, fontSize + padding * 0.5);
+  // Outer glow pass
+  ctx.shadowColor = 'rgba(255, 255, 255, 0.75)';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillText(text, padding + 8, fontSize + padding);
+  // Inner sharper glow
+  ctx.shadowBlur = 6;
+  ctx.fillText(text, padding + 8, fontSize + padding);
+  // Crisp text on top
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,255,255,1)';
+  ctx.fillText(text, padding + 8, fontSize + padding);
   const texture = new THREE.CanvasTexture(canvas);
   _labelTextureCache.set(text, texture);
   return texture;
@@ -112,9 +125,9 @@ export function GraphView() {
   const [hiddenGroups, setHiddenGroups] = useState<Set<GroupKey>>(new Set());
   const [startDate, setStartDate] = useState(oneYearAgo());
   const [endDate, setEndDate] = useState(today());
-  // Defaults chosen so the 3-D force mapping produces reasonable initial layouts:
-  // repelStrength 35000 → d3 charge ≈ -105; linkStrength 0.001 → link dist ≈ 130
-  const [repelStrength, setRepelStrength] = useState(35000);
+  // Defaults chosen so the 3-D force mapping produces well-separated initial layouts:
+  // repelStrength 80000 → d3 charge ≈ -320; linkStrength 0.001 → link dist ≈ 200
+  const [repelStrength, setRepelStrength] = useState(80000);
   const [linkStrength, setLinkStrength] = useState(0.001);
   const [showControls, setShowControls] = useState(false);
 
@@ -140,7 +153,7 @@ export function GraphView() {
     const showDreams    = !hiddenGroups.has('dreams');
     const visibleCatSet = new Set(ALL_GROUPS.filter(g => g !== 'dreams' && !hiddenGroups.has(g)));
 
-    // Tag nodes — size proportional to usage_count
+    // Tag nodes — size proportional to usage_count, reduced by 50%
     tags
       .filter(t => visibleCatSet.has(t.category as GroupKey))
       .forEach(tag => {
@@ -150,7 +163,7 @@ export function GraphView() {
           nodeType: 'tag',
           category: tag.category as GroupKey,
           color: getCategoryColor(tag.category),
-          size: Math.max(3, Math.min(14, tag.usage_count * 1.8 + 3)),
+          size: Math.max(1.5, Math.min(7, tag.usage_count * 0.9 + 1.5)),
         });
       });
 
@@ -169,7 +182,7 @@ export function GraphView() {
           name: dream.title,
           nodeType: 'dream',
           color: GROUP_COLORS.dreams,
-          size: 2.5,
+          size: 8,   // larger than the max tag size (7) so dream nodes always stand out
           dreamId: dream.id,
         });
 
@@ -196,8 +209,8 @@ export function GraphView() {
       }
     });
 
-    // Tag–tag co-occurrence edges
-    const coEdgeThreshold = showDreams ? 2 : 1;
+    // Tag–tag co-occurrence edges — higher threshold trims low-signal edges
+    const coEdgeThreshold = showDreams ? 3 : 2;
     const addedEdges = new Set<string>();
     tagCoOccurrence.forEach((coTags, tagId) => {
       coTags.forEach((count, coTagId) => {
@@ -237,7 +250,8 @@ export function GraphView() {
       .nodeColor((node: NodeObject) => (node as GNode).color)
       .nodeOpacity(0.92)
       .nodeResolution(12)
-      // Custom node rendering — label sprite always visible above each node
+      // Custom node rendering — label sprite always visible above each node,
+      // drawn on top of all edges and spheres (depthTest: false).
       .nodeThreeObject((node: NodeObject) => {
         const n = node as GNode;
         const texture = getLabelTexture(n.name);
@@ -245,10 +259,15 @@ export function GraphView() {
           map: texture,
           transparent: true,
           depthWrite: false,
+          depthTest: false,   // render on top of everything — labels cut through edges & nodes
         });
         const sprite = new THREE.Sprite(spriteMat);
-        sprite.scale.set(texture.image.width / 4, texture.image.height / 4, 1);
-        sprite.position.set(0, n.size + 4, 0);
+        sprite.renderOrder = 999;
+        const img = texture.image as HTMLCanvasElement;
+        sprite.scale.set(img.width / 4, img.height / 4, 1);
+        // Place sprite so its bottom edge sits just above the node sphere surface
+        const spriteHalfH = (img.height / 4) / 2;
+        sprite.position.set(0, n.size + spriteHalfH + 1, 0);
         return sprite;
       })
       .nodeThreeObjectExtend(true)   // also render default sphere behind the sprite
@@ -259,10 +278,10 @@ export function GraphView() {
         const l = link as GLink;
         return l.linkType === 'tag-tag' ? '#ccccee' : '#8888aa';
       })
-      .linkOpacity(0.8)
+      .linkOpacity(0.35)
       .linkWidth((link: LinkObject) => {
         const l = link as GLink;
-        return l.linkType === 'tag-tag' ? Math.min(l.weight * 0.9, 4) : 0.8;
+        return l.linkType === 'tag-tag' ? Math.min(l.weight * 0.6, 2.5) : 0.5;
       })
       .linkDirectionalParticles(0)
       // Interactions
@@ -307,6 +326,12 @@ export function GraphView() {
       // Initial data
       .graphData(graphData as { nodes: NodeObject[]; links: LinkObject[] });
 
+    // Collision force — keeps node spheres from overlapping each other
+    graph.d3Force('collide', forceCollide((node: NodeObject) => {
+      const n = node as GNode;
+      return (n.size ?? 4) + 5;  // sphere radius + 5-unit buffer
+    }).strength(0.9));
+
     graphRef.current = graph;
 
     // Resize observer
@@ -341,10 +366,10 @@ export function GraphView() {
   // ── Map physics slider values to 3D force params ──────────────────────────
   useEffect(() => {
     if (!graphRef.current) return;
-    // repelStrength: [5000, 40000] → charge strength [-15, -120]
-    const charge = -Math.max(15, repelStrength / 333);
+    // repelStrength: [5000, 100000] → charge strength [-25, -400]
+    const charge = -Math.max(25, repelStrength / 250);
     // linkStrength: [0.00005, 0.005] → link distance [150, 30]
-    const linkDist = Math.max(30, 150 - linkStrength * 20000);
+    const linkDist = Math.max(30, 200 - linkStrength * 200);
     graphRef.current.d3Force('charge')?.strength(charge);
     graphRef.current.d3Force('link')?.distance(linkDist);
     if (physicsReadyRef.current) {

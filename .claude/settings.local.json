@@ -25,7 +25,9 @@
       "Bash(npm show:*)",
       "Bash(npm list:*)",
       "Bash(npm install:*)",
-      "Bash(npx patch-package:*)"
+      "Bash(npx patch-package:*)",
+      "Bash(xargs ls:*)",
+      "Bash(node -e \"require\\('d3-force-3d'\\); console.log\\('ok'\\)\")"
     ]
   }
 }
