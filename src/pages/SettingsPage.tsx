@@ -10,14 +10,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { exportToObsidian, getObsidianPath, verifyApiKey, updateTag } from '@/lib/tauri';
 import { friendlyApiError } from '@/lib/apiError';
-import { useThemeStore, THEME_CONFIGS, FONT_STACKS, type ThemeConfig, type ThemeId, type FontFamily } from '@/stores/themeStore';
+import { useThemeStore, THEME_CONFIGS, FONT_STACKS, type ThemeConfig, type FontFamily } from '@/stores/themeStore';
 import { useTagStore } from '@/stores/tagStore';
 
 const FONTS: { id: FontFamily; label: string; preview: string }[] = [
-  { id: 'system',   label: 'System UI',  preview: 'The quick brown fox' },
-  { id: 'humanist', label: 'Humanist',   preview: 'The quick brown fox' },
-  { id: 'serif',    label: 'Serif',      preview: 'The quick brown fox' },
-  { id: 'mono',     label: 'Monospace',  preview: 'The quick brown fox' },
+  { id: 'themeDefault', label: 'Theme Default', preview: 'The quick brown fox' },
+  { id: 'system',       label: 'System UI',     preview: 'The quick brown fox' },
+  { id: 'humanist',     label: 'Humanist',      preview: 'The quick brown fox' },
+  { id: 'serif',        label: 'Serif',         preview: 'The quick brown fox' },
+  { id: 'mono',         label: 'Monospace',     preview: 'The quick brown fox' },
 ];
 
 
@@ -113,6 +114,28 @@ export function SettingsPage() {
   const [paletteStatus, setPaletteStatus] = useState<'idle' | 'applying' | 'done' | 'error'>('idle');
   const [paletteMessage, setPaletteMessage] = useState('');
 
+  // Apply the active theme's per-category tag palette to all tags in the DB
+  const handleApplyThemePalette = async () => {
+    const config = THEME_CONFIGS[activeTheme];
+    setPaletteStatus('applying');
+    setPaletteMessage('');
+    try {
+      let updated = 0;
+      for (const tag of tags) {
+        const color = config.tagPalette[tag.category as keyof typeof config.tagPalette];
+        if (!color || color === tag.color) continue;
+        await updateTag({ ...tag, color });
+        updated++;
+      }
+      await fetchTags();
+      setPaletteStatus('done');
+      setPaletteMessage(`Updated ${updated} tag${updated !== 1 ? 's' : ''}.`);
+    } catch (err) {
+      setPaletteStatus('error');
+      setPaletteMessage(String(err));
+    }
+  };
+
   const handlePaletteUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -176,14 +199,57 @@ export function SettingsPage() {
                       : 'border-border hover:bg-accent',
                   ].join(' ')}
                 >
+                  {/* Colour swatches */}
+                  <div className="flex gap-1 mb-2">
+                    {t.previewSwatches.map((hex) => (
+                      <span
+                        key={hex}
+                        className="inline-block h-3 w-6 rounded-sm border border-black/10"
+                        style={{ backgroundColor: hex }}
+                      />
+                    ))}
+                  </div>
                   <p className="text-sm font-semibold">{t.label}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    Default font: {t.defaultFont} · Icons: {t.iconStrokeWidth}px
+                  <p className="text-xs text-muted-foreground/60 mt-1.5">
+                    {t.primaryFontLabel}
+                    {t.secondaryFontLabel !== t.primaryFontLabel && (
+                      <> · {t.secondaryFontLabel}</>
+                    )}
                   </p>
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Apply theme tag palette */}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleApplyThemePalette}
+              disabled={paletteStatus === 'applying'}
+            >
+              {paletteStatus === 'applying' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SwatchBook className="h-4 w-4" />
+              )}
+              Apply theme tag colours
+            </Button>
+            {paletteStatus === 'done' && (
+              <span className="flex items-center gap-1.5 text-sm text-green-500">
+                <Check className="h-4 w-4" />
+                {paletteMessage}
+              </span>
+            )}
+            {paletteStatus === 'error' && (
+              <span className="text-sm text-destructive">{paletteMessage}</span>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Batch-sets each tag's colour to the active theme's palette.
+            </p>
           </div>
 
           <Separator />

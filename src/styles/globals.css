@@ -220,8 +220,9 @@
 
 /* ── Persona 5 design system ─────────────────────────────────────────────── */
 
-/* Body font: slightly tighter tracking for a sharper read */
+/* Body font: Mementos default — system UI with tighter tracking for a sharp P5 read */
 body {
+  font-family: system-ui, -apple-system, sans-serif;
   letter-spacing: -0.01em;
 }
 

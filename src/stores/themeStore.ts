@@ -2,36 +2,45 @@ import { create } from 'zustand';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ThemeId = 'mementos' | 'base' | 'clarity' | 'neon';
+export type ThemeId = 'mementos' | 'base' | 'clarity' | 'neon' | 'bauhaus' | 'greco';
 
-export type FontFamily = 'system' | 'serif' | 'mono' | 'humanist';
+// 'themeDefault' lets the active theme's CSS govern body font without any
+// override from the user preference layer.  Switching themes auto-resets to
+// this value so the incoming theme's typography takes full effect.
+export type FontFamily = 'themeDefault' | 'system' | 'serif' | 'mono' | 'humanist';
 
 // Single source of truth for font stacks — used by ThemeProvider (CSS rules)
-// and SettingsPage (inline style previews).
+// and SettingsPage (inline style previews).  'themeDefault' resolves to
+// 'inherit' so the preview falls through to whatever the theme CSS sets.
 export const FONT_STACKS: Record<FontFamily, string> = {
-  system:   'system-ui, -apple-system, sans-serif',
-  humanist: 'Seravek, "Gill Sans Nova", Ubuntu, Calibri, "DejaVu Sans", source-sans-pro, sans-serif',
-  serif:    'Georgia, "Times New Roman", serif',
-  mono:     '"Courier New", Courier, monospace',
+  themeDefault: 'inherit',
+  system:       'system-ui, -apple-system, sans-serif',
+  humanist:     'Seravek, "Gill Sans Nova", Ubuntu, Calibri, "DejaVu Sans", source-sans-pro, sans-serif',
+  serif:        'Georgia, "Times New Roman", serif',
+  mono:         '"Courier New", Courier, monospace',
 };
 
-/**
- * Per-theme configuration baked into the theme definition.
- * These defaults are applied when the theme is activated; users can still
- * override font and background through the Settings controls.
- */
+// Category keys mirror TagCategory from tauri.ts — defined here to avoid a
+// cross-layer import while keeping tagPalette fully typed.
+export type TagCategoryKey = 'location' | 'person' | 'symbolic' | 'emotive' | 'custom';
+
 export interface ThemeConfig {
   id: ThemeId;
   label: string;
   description: string;
-  /** Default font applied when the theme is selected. */
+  /** Font auto-selected when the theme is activated. */
   defaultFont: FontFamily;
-  /** Optional CSS for a background image / gradient. Empty string = none. */
   backgroundImageCss: string;
-  /** Lucide icon stroke-width: thinner for minimal themes, thicker for bold. */
   iconStrokeWidth: number;
-  /** Base font-size scalar — '1rem' for normal, '0.9375rem' for compact (P5). */
   baseFontSize: string;
+  /** Human-readable name of the title / display font. */
+  primaryFontLabel: string;
+  /** Human-readable name of the body / prose font. */
+  secondaryFontLabel: string;
+  /** Hex colour per tag category — applied to DB tags via the Settings button. */
+  tagPalette: Record<TagCategoryKey, string>;
+  /** 4 representative hex colours shown as swatches in the theme selector. */
+  previewSwatches: string[];
 }
 
 export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
@@ -39,48 +48,129 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
     id: 'mementos',
     label: 'Mementos',
     description: 'Bold Persona 5 aesthetic — angular cards, vivid red accents, maximalist energy.',
-    defaultFont: 'system',
-    backgroundImageCss: '',  // P5 rings are defined in globals.css .journal-rings-bg
+    defaultFont: 'themeDefault',
+    backgroundImageCss: '',
     iconStrokeWidth: 2.5,
     baseFontSize: '0.9375rem',
+    primaryFontLabel: 'Persona5 (custom display)',
+    secondaryFontLabel: 'System UI',
+    tagPalette: {
+      location: '#22c55e',
+      person:   '#3b82f6',
+      symbolic: '#a855f7',
+      emotive:  '#f43f5e',
+      custom:   '#f59e0b',
+    },
+    previewSwatches: ['#de0615', '#ffffff', '#0a0a12', '#7a0a0a'],
   },
+
   base: {
     id: 'base',
-    label: 'Base Theme',
-    description: 'Clean minimal dark theme with indigo accents, soft corners, and subtle starfield.',
-    defaultFont: 'humanist',
-    backgroundImageCss: `
-      radial-gradient(ellipse at 20% 50%, hsl(239 84% 67% / 0.04) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 20%, hsl(270 60% 50% / 0.03) 0%, transparent 50%)
-    `.trim(),
+    label: 'Base',
+    description: 'Clean minimal dark theme — indigo accents, soft rounded cards, subtle depth.',
+    defaultFont: 'themeDefault',
+    backgroundImageCss: '',
     iconStrokeWidth: 1.75,
     baseFontSize: '1rem',
+    primaryFontLabel: 'Humanist (system)',
+    secondaryFontLabel: 'Humanist (system)',
+    tagPalette: {
+      location: '#4ade80',
+      person:   '#60a5fa',
+      symbolic: '#c084fc',
+      emotive:  '#fb7185',
+      custom:   '#fbbf24',
+    },
+    previewSwatches: ['#6366f1', '#8b5cf6', '#0f0f1a', '#252540'],
   },
+
   clarity: {
     id: 'clarity',
     label: 'Clarity',
-    description: 'High-contrast greyscale — large text, maximum readability, no visual clutter. Designed for comfort and accessibility.',
-    defaultFont: 'serif',
+    description: 'High-contrast light theme — large serif text, maximum readability, accessible.',
+    defaultFont: 'themeDefault',
     backgroundImageCss: '',
     iconStrokeWidth: 2,
     baseFontSize: '1.125rem',
+    primaryFontLabel: 'Georgia (serif)',
+    secondaryFontLabel: 'Georgia (serif)',
+    tagPalette: {
+      location: '#166534',
+      person:   '#1e40af',
+      symbolic: '#6b21a8',
+      emotive:  '#9f1239',
+      custom:   '#92400e',
+    },
+    previewSwatches: ['#0d0d0d', '#f5f5f5', '#e0e0e0', '#4a4a4a'],
   },
+
   neon: {
     id: 'neon',
     label: 'Neon Noir',
-    description: 'Modern high-contrast dark theme — near-black background with vivid cyan and magenta accents, sharp edges.',
-    defaultFont: 'mono',
+    description: 'Near-black with vivid cyan and magenta accents, monospace type, sharp edges.',
+    defaultFont: 'themeDefault',
     backgroundImageCss: '',
     iconStrokeWidth: 1.5,
     baseFontSize: '1rem',
+    primaryFontLabel: 'Monospace (system)',
+    secondaryFontLabel: 'Monospace (system)',
+    tagPalette: {
+      location: '#00d4aa',
+      person:   '#00b4ff',
+      symbolic: '#cc44ff',
+      emotive:  '#ff2288',
+      custom:   '#ffaa00',
+    },
+    previewSwatches: ['#00ffff', '#cc00ff', '#070710', '#1a1a3a'],
+  },
+
+  bauhaus: {
+    id: 'bauhaus',
+    label: 'Bauhaus',
+    description: 'De Stijl geometry — Mondrian primary colours, flat planes, Josefin Sans, zero ornament.',
+    defaultFont: 'themeDefault',
+    backgroundImageCss: '',
+    iconStrokeWidth: 2,
+    baseFontSize: '1rem',
+    primaryFontLabel: 'Josefin Sans (geometric)',
+    secondaryFontLabel: 'Josefin Sans (geometric)',
+    tagPalette: {
+      location: '#2d4ea3',
+      person:   '#e63329',
+      symbolic: '#c4901a',
+      emotive:  '#1e88e5',
+      custom:   '#9e9e9e',
+    },
+    previewSwatches: ['#e63329', '#2d4ea3', '#f5c518', '#141414'],
+  },
+
+  greco: {
+    id: 'greco',
+    label: 'Greco-Roman',
+    description: 'Classical antiquity — Cinzel capitals, Cormorant Garamond prose, black and gold.',
+    defaultFont: 'themeDefault',
+    backgroundImageCss: '',
+    iconStrokeWidth: 1.5,
+    baseFontSize: '1rem',
+    primaryFontLabel: 'Cinzel (classical capitals)',
+    secondaryFontLabel: 'Cormorant Garamond (elegant serif)',
+    tagPalette: {
+      location: '#c5973b',
+      person:   '#a8a09a',
+      symbolic: '#7b5ea7',
+      emotive:  '#a0522d',
+      custom:   '#708090',
+    },
+    previewSwatches: ['#c5973b', '#f5f0e8', '#0d0b08', '#4a3d25'],
   },
 };
+
+// ── Store ─────────────────────────────────────────────────────────────────────
 
 interface ThemeState {
   activeTheme: ThemeId;
   fontFamily: FontFamily;
   customCss: string;
-  /** User-supplied background image URL (overrides theme default when set). */
   backgroundImageUrl: string;
 
   setTheme: (theme: ThemeId) => void;
@@ -89,20 +179,24 @@ interface ThemeState {
   setBackgroundImageUrl: (url: string) => void;
 }
 
-const THEME_KEY  = 'appearance_theme';
-const FONT_KEY   = 'appearance_font';
-const CSS_KEY    = 'appearance_custom_css';
-const BG_KEY     = 'appearance_background_url';
+const THEME_KEY = 'appearance_theme';
+const FONT_KEY  = 'appearance_font';
+const CSS_KEY   = 'appearance_custom_css';
+const BG_KEY    = 'appearance_background_url';
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  activeTheme:        (localStorage.getItem(THEME_KEY) as ThemeId | null) ?? 'mementos',
-  fontFamily:         (localStorage.getItem(FONT_KEY)  as FontFamily | null) ?? 'system',
+  activeTheme:        (localStorage.getItem(THEME_KEY) as ThemeId   | null) ?? 'mementos',
+  fontFamily:         (localStorage.getItem(FONT_KEY)  as FontFamily | null) ?? 'themeDefault',
   customCss:          localStorage.getItem(CSS_KEY) ?? '',
-  backgroundImageUrl: localStorage.getItem(BG_KEY) ?? '',
+  backgroundImageUrl: localStorage.getItem(BG_KEY)  ?? '',
 
   setTheme: (theme) => {
     localStorage.setItem(THEME_KEY, theme);
-    set({ activeTheme: theme });
+    // Reset font to 'themeDefault' on every theme switch so the incoming
+    // theme's typography takes effect without the previous user override
+    // fighting it.  The user can re-select a manual font after switching.
+    localStorage.setItem(FONT_KEY, 'themeDefault');
+    set({ activeTheme: theme, fontFamily: 'themeDefault' });
   },
 
   setFontFamily: (font) => {

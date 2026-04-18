@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useDreamStore } from '@/stores/dreamStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useUIStore } from '@/stores/uiStore';
-import { getCategoryColor } from '@/lib/utils';
+import { useThemeStore, THEME_CONFIGS, type TagCategoryKey } from '@/stores/themeStore';
 import { GraphStats } from './GraphStats';
 
 // ── Group definitions ────────────────────────────────────────────────────────
@@ -28,14 +28,7 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   custom: 'Custom',
 };
 
-const GROUP_COLORS: Record<GroupKey, string> = {
-  dreams: '#6b7280',
-  location: '#22c55e',
-  person: '#3b82f6',
-  symbolic: '#a855f7',
-  emotive: '#f43f5e',
-  custom: '#f59e0b',
-};
+const DREAM_NODE_COLOR = '#6b7280';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -136,6 +129,7 @@ export function GraphView() {
   const { dreams, fetchDreams } = useDreamStore();
   const { tags, fetchTags } = useTagStore();
   const { openEditor } = useUIStore();
+  const { activeTheme } = useThemeStore();
 
   // Keep openEditor in a ref so the init effect doesn't re-run on identity change
   useEffect(() => { openEditorRef.current = openEditor; }, [openEditor]);
@@ -171,35 +165,31 @@ export function GraphView() {
     const showDreams    = !hiddenGroups.has('dreams');
     const visibleCatSet = new Set(ALL_GROUPS.filter(g => g !== 'dreams' && !hiddenGroups.has(g)));
 
-    // Tag nodes — size proportional to usage_count, reduced by 50%
-    tags
-      .filter(t => visibleCatSet.has(t.category as GroupKey))
-      .forEach(tag => {
-        nodes.push({
-          id: `tag-${tag.id}`,
-          name: tag.name,
-          nodeType: 'tag',
-          category: tag.category as GroupKey,
-          color: getCategoryColor(tag.category),
-          size: Math.max(1.5, Math.min(7, tag.usage_count * 0.9 + 1.5)),
-        });
-      });
-
     // Filter dreams to selected date range
     const filteredDreams = dreams.filter(d => {
       const date = d.dream_date.slice(0, 10);
       return date >= startDate && date <= endDate;
     });
 
+    // Track which tag IDs are actually referenced by dreams in the current window.
+    // Trigger: tag nodes were previously built from the full tag store before date-filtering.
+    // Why: a tag whose dreams all fall outside the date range would get a node but zero
+    //      edges — an orphan. We only create tag nodes we can connect to something.
+    const referencedTagIds = new Set<string>();
+
     filteredDreams.forEach(dream => {
       const dreamTags = dream.tags.filter(t => visibleCatSet.has(t.category as GroupKey));
 
-      if (showDreams) {
+      for (const tag of dreamTags) referencedTagIds.add(tag.id);
+
+      // Trigger: dream has no tags in any visible category.
+      // Why: without visible tags there are no edges to attach — skip to avoid orphan nodes.
+      if (showDreams && dreamTags.length > 0) {
         nodes.push({
           id: `dream-${dream.id}`,
           name: dream.title,
           nodeType: 'dream',
-          color: GROUP_COLORS.dreams,
+          color: DREAM_NODE_COLOR,
           size: 8,   // larger than the max tag size (7) so dream nodes always stand out
           dreamId: dream.id,
         });
@@ -226,6 +216,20 @@ export function GraphView() {
         }
       }
     });
+
+    // Tag nodes — only for tags referenced by at least one dream in the current window
+    tags
+      .filter(t => visibleCatSet.has(t.category as GroupKey) && referencedTagIds.has(t.id))
+      .forEach(tag => {
+        nodes.push({
+          id: `tag-${tag.id}`,
+          name: tag.name,
+          nodeType: 'tag',
+          category: tag.category as GroupKey,
+          color: tag.color,
+          size: Math.max(1.5, Math.min(7, tag.usage_count * 0.9 + 1.5)),
+        });
+      });
 
     // Tag–tag co-occurrence edges — higher threshold trims low-signal edges
     const coEdgeThreshold = showDreams ? 3 : 2;
@@ -492,7 +496,11 @@ export function GraphView() {
                     ? 'border-border bg-transparent text-muted-foreground opacity-50'
                     : 'border-transparent text-white',
                 ].join(' ')}
-                style={hidden ? {} : { backgroundColor: GROUP_COLORS[group] }}
+                style={hidden ? {} : {
+                  backgroundColor: group === 'dreams'
+                    ? DREAM_NODE_COLOR
+                    : THEME_CONFIGS[activeTheme].tagPalette[group as TagCategoryKey],
+                }}
               >
                 {hidden
                   ? <EyeOff className="h-3 w-3 shrink-0" />
