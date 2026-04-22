@@ -25,7 +25,6 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 - **Draft auto-save**: The dream editor auto-saves a draft to localStorage while you write; if the app closes unexpectedly, a restore banner offers to recover your content on the next open
 - **Theme Analysis**: Cross-tag pattern analysis with custom notes per tag
 - **Full-text Search**: Quick search across all dreams (Ctrl+K)
-- **Obsidian Export**: Export to Obsidian vault with wikilinks and Dataview support
 - **Handwriting Scan**: Import handwritten dream notes using a two-stage Claude AI pipeline — raw transcription followed by English translation, with auto tag matching
 - **Grammar Fix**: One-click toolbar button that corrects common grammar issues (contractions, capitalisation, double spaces)
 - **Auto-match Tags**: Scans the dream text and automatically applies any tags whose name appears in the content
@@ -89,11 +88,17 @@ A full-stack desktop application for dream analysis with rich tagging, calendar 
 
 ```
 dreams/
-├── src-tauri/           # Rust backend
+├── crates/
+│   ├── dreams-core/     # Platform-independent Rust backend (no Tauri dep)
+│   │   └── src/         # models, db, dreams, tags, search, graph, claude, theme
+│   └── dreams-ffi/      # C ABI shim for mobile (iOS/Android/Flutter/React Native)
+│       ├── src/         # JSON-dispatch extern "C" surface
+│       └── include/     # dreams_ffi.h — C header for host tooling
+│
+├── src-tauri/           # Tauri desktop shim (delegates to dreams-core)
 │   ├── src/
-│   │   ├── commands/    # IPC handlers (dreams, tags, search, obsidian)
-│   │   ├── db/          # SQLite database and migrations
-│   │   └── models/      # Data structures
+│   │   ├── commands/    # Thin #[tauri::command] wrappers + Windows OCR
+│   │   └── lib.rs       # App setup: resolves DB path, opens Backend, registers commands
 │   └── Cargo.toml
 │
 ├── src/                 # React frontend
@@ -111,9 +116,19 @@ dreams/
 │   ├── hooks/           # Custom hooks
 │   └── lib/             # Utilities
 │
+├── Cargo.toml           # Workspace root
 ├── package.json
 └── tailwind.config.js
 ```
+
+### Mobile Strategy
+
+The architecture is prepared for a future iOS/Android release:
+
+- **`dreams-core`** — zero Tauri deps; links into any Rust host. All business logic lives here.
+- **`dreams-ffi`** — compiles to a `.so` / `.a` / `.dylib`. Mobile hosts call `dreams_open(path)` then `dreams_call(ctx, method, args_json)` and get a JSON envelope back. The method names match Tauri `invoke()` exactly, so the same TS client layer can target either backend with a one-line abstraction.
+- **`python-analysis` feature flag** — the graph stats Python subprocess is off by default in `dreams-ffi`; mobile builds get pure-Rust graph construction via `build_graph_input`.
+- **Windows OCR** — stays in `src-tauri/` only; mobile uses Claude AI handwriting transcription instead.
 
 ## AI Handwriting Transcription
 
@@ -198,10 +213,10 @@ network analysis on the tag co-occurrence graph for any chosen date window.
 
 ```
 src-python/
-├── graph_analysis.py   # Python math engine
+├── graph_analysis.py   # Python math engine (canonical source)
 └── GRAPHTHEORY.md      # Formula reference
-src-tauri/resources/
-└── graph_analysis.py   # Compiled into the binary via include_str!
+crates/dreams-core/src/
+└── graph_analysis.py   # Compiled into binary via include_str! (python-analysis feature)
 ```
 
 ## Professional Mode
@@ -232,17 +247,6 @@ The SQLite database is stored in the app data directory:
 - Windows: `%APPDATA%/com.dreams.app/dreams.db`
 - macOS: `~/Library/Application Support/com.dreams.app/dreams.db`
 - Linux: `~/.local/share/com.dreams.app/dreams.db`
-
-## Obsidian Export
-
-Dreams can be exported to an Obsidian vault. The target path is configured in the Rust backend and is displayed in **Settings → Obsidian Export**.
-
-The export creates:
-- Dream files organized by year/month
-- Tag files organized by category
-- YAML frontmatter with metadata
-- Wikilinks for navigation
-- Dataview queries for related dreams
 
 ## Visual Customization
 

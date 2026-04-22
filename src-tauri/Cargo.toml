@@ -1,9 +1,9 @@
 [package]
 name = "dreams"
-version = "0.1.0"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 description = "A Dream Tracker Application"
-authors = ["you"]
-edition = "2021"
 
 [lib]
 name = "dreams_lib"
@@ -13,18 +13,18 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Platform-independent business logic. All DB / HTTP / graph code lives here
+# so the same crate can be linked from the mobile FFI shim without pulling in
+# any Tauri dependencies.
+dreams-core = { path = "../crates/dreams-core" }
+
 tauri = { version = "2", features = [] }
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1", features = ["v4", "serde"] }
-thiserror = "1"
-base64 = "0.22"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
-tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+tokio.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
@@ -36,9 +36,3 @@ windows = { version = "0.58", features = [
     "Win32_System_Com",
 ] }
 
-[profile.release]
-panic = "abort"
-codegen-units = 1
-lto = true
-opt-level = "s"
-strip = true
