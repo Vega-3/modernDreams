@@ -14,6 +14,7 @@ import type { Tag } from '@/lib/tauri';
 
 function ArchetypeCard({ archetype }: { archetype: Archetype }) {
   const { tags } = useTagStore();
+  const { dreams } = useDreamStore();
   const { dreamArchetypeMap, linkTagToArchetype, unlinkTagFromArchetype } = useArchetypeStore();
   const [expanded, setExpanded] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
@@ -29,6 +30,23 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
     ids.includes(archetype.id)
   ).length;
 
+  // Distinct dreams whose tag set intersects this archetype's linked tags.
+  // Why: the user manually links tags once; from then on every dream bearing
+  // those tags implicitly belongs to this archetype's orbit. Surfacing the
+  // distinct dream count here makes that inheritance visible without the user
+  // having to apply the archetype to each dream individually.
+  // Key the memo on the linkedTagIds array (stable across renders) rather
+  // than the freshly-built Set (new identity every render).
+  const tagReach = useMemo(() => {
+    if (archetype.linkedTagIds.length === 0) return 0;
+    const ids = new Set(archetype.linkedTagIds);
+    let count = 0;
+    for (const dream of dreams) {
+      if (dream.tags.some((t) => ids.has(t.id))) count++;
+    }
+    return count;
+  }, [dreams, archetype.linkedTagIds]);
+
   return (
     <Card className="flex flex-col overflow-hidden border-l-4" style={{ borderLeftColor: archetype.color }}>
       <CardHeader className="pb-2 pt-3 px-4">
@@ -43,8 +61,23 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
             </CardTitle>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            <Badge
+              variant="outline"
+              className="text-[10px] h-4 px-1.5"
+              title={
+                linkedTags.length === 0
+                  ? 'No tags linked to this archetype yet'
+                  : `${linkedTags.length} linked tag${linkedTags.length !== 1 ? 's' : ''}: ${linkedTags.map((t) => t.name).join(', ')}`
+              }
+            >
+              {linkedTags.length} tag{linkedTags.length !== 1 ? 's' : ''}
+            </Badge>
             {dreamCount > 0 && (
-              <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+              <Badge
+                variant="secondary"
+                className="text-[10px] h-4 px-1.5"
+                title="Dreams where this archetype was applied directly"
+              >
                 {dreamCount} dream{dreamCount !== 1 ? 's' : ''}
               </Badge>
             )}
@@ -71,7 +104,8 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
           </div>
         )}
 
-        {/* Linked tags */}
+        {/* Linked tags — each chip shows the tag's dream usage count so the
+            user sees at a glance which linked tags carry the most weight. */}
         <div className="flex flex-wrap gap-1 min-h-[20px]">
           {linkedTags.length === 0 ? (
             <span className="text-[11px] text-muted-foreground/60 italic">No tags linked yet</span>
@@ -79,13 +113,21 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
             linkedTags.map((tag) => (
               <span
                 key={tag.id}
-                className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1 text-[11px] pl-1.5 pr-1 py-0.5 rounded-full"
                 style={{ backgroundColor: tag.color + '33', color: tag.color }}
+                title={`${tag.name} appears in ${tag.usage_count} dream${tag.usage_count !== 1 ? 's' : ''}`}
               >
-                {tag.name}
+                <span>{tag.name}</span>
+                <span
+                  className="text-[9px] font-bold leading-none px-1 py-0.5 rounded-full"
+                  style={{ backgroundColor: tag.color + '55' }}
+                >
+                  {tag.usage_count}
+                </span>
                 <button
                   className="opacity-60 hover:opacity-100"
                   onClick={() => unlinkTagFromArchetype(archetype.id, tag.id)}
+                  title="Unlink tag"
                 >
                   <Link2Off className="h-2.5 w-2.5" />
                 </button>
@@ -93,6 +135,17 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
             ))
           )}
         </div>
+
+        {/* Aggregate reach — distinct dreams containing any linked tag. Updates
+            automatically as dreams are tagged; no manual archetype application
+            required. */}
+        {linkedTags.length > 0 && (
+          <p className="text-[11px] text-muted-foreground/80">
+            Linked tags appear in{' '}
+            <span className="font-medium text-foreground">{tagReach}</span>{' '}
+            dream{tagReach !== 1 ? 's' : ''} across the journal.
+          </p>
+        )}
 
         {/* Link tag panel — always visible */}
         <div className="rounded-md border bg-muted/20 p-2 space-y-1.5">

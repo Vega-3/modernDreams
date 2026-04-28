@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DreamViewer } from '@/components/dreams/DreamViewer';
 import { useSeriesStore, suggestSeriesFromDreams, type DreamSeries } from '@/stores/seriesStore';
 import { useDreamStore } from '@/stores/dreamStore';
+import { useUIStore } from '@/stores/uiStore';
 import { cn, getCategoryColor } from '@/lib/utils';
 import type { Dream } from '@/lib/tauri';
 
@@ -24,7 +26,15 @@ function resolveSeriesDreams(dreamIds: string[], dreamMap: Map<string, Dream>): 
 
 // ── Horizontal timeline ───────────────────────────────────────────────────────
 
-function SeriesTimeline({ series, dreamMap }: { series: DreamSeries; dreamMap: Map<string, Dream> }) {
+function SeriesTimeline({
+  series,
+  dreamMap,
+  onViewDream,
+}: {
+  series: DreamSeries;
+  dreamMap: Map<string, Dream>;
+  onViewDream: (id: string) => void;
+}) {
   const seriesDreams = resolveSeriesDreams(series.dreamIds, dreamMap);
 
   if (seriesDreams.length === 0) {
@@ -47,16 +57,18 @@ function SeriesTimeline({ series, dreamMap }: { series: DreamSeries; dreamMap: M
           const symbolic = dream.tags.filter((t) => t.category === 'symbolic').slice(0, 3);
 
           return (
-            <div
+            <button
               key={dream.id}
-              className="flex flex-col items-center gap-1.5 shrink-0 group"
+              type="button"
+              onClick={() => onViewDream(dream.id)}
+              className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
               style={{ minWidth: 72 }}
+              title={`${dream.title}\n${dream.dream_date}${symbolic.length ? '\n' + symbolic.map((t) => t.name).join(', ') : ''}\n\nClick to view`}
             >
               {/* Node */}
               <div
-                className="w-10 h-10 rounded-full border-2 border-background shadow-sm z-10 relative flex items-center justify-center cursor-default transition-transform group-hover:scale-110"
+                className="w-10 h-10 rounded-full border-2 border-background shadow-sm z-10 relative flex items-center justify-center transition-transform group-hover:scale-110"
                 style={{ backgroundColor: dotColor }}
-                title={`${dream.title}\n${dream.dream_date}${symbolic.length ? '\n' + symbolic.map((t) => t.name).join(', ') : ''}`}
               >
                 <span className="text-[9px] text-white font-bold leading-none text-center px-0.5">
                   {dream.title.slice(0, 3).toUpperCase()}
@@ -68,12 +80,11 @@ function SeriesTimeline({ series, dreamMap }: { series: DreamSeries; dreamMap: M
               </span>
               {/* Title truncated */}
               <span
-                className="text-[9px] text-center leading-tight max-w-[68px] truncate text-foreground/70"
-                title={dream.title}
+                className="text-[9px] text-center leading-tight max-w-[68px] truncate text-foreground/70 group-hover:text-foreground"
               >
                 {dream.title}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -140,11 +151,17 @@ function TagEvolution({ series, dreamMap }: { series: DreamSeries; dreamMap: Map
 function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allDreams: Dream[]; dreamMap: Map<string, Dream> }) {
   const { deleteSeries, addDreamToSeries, removeDreamFromSeries, setInterpretation, renameSeries } =
     useSeriesStore();
+  const { openEditor } = useUIStore();
   const [expanded, setExpanded] = useState(true);
   const [showAddDream, setShowAddDream] = useState(false);
   const [dreamSearch, setDreamSearch] = useState('');
   const [interpretation, setLocalInterp] = useState(series.interpretation);
+  const [viewDreamId, setViewDreamId] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The dream currently displayed in the modal viewer. Looked up each render
+  // so the viewer stays in sync if the dream list refreshes underneath.
+  const viewDream = viewDreamId ? dreamMap.get(viewDreamId) : null;
 
   const handleInterpretation = (val: string) => {
     setLocalInterp(val);
@@ -190,13 +207,13 @@ function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allD
 
       {expanded && (
         <CardContent className="px-4 pb-4 space-y-3">
-          {/* Timeline */}
-          <SeriesTimeline series={series} dreamMap={dreamMap} />
+          {/* Timeline — click any node to open the dream viewer */}
+          <SeriesTimeline series={series} dreamMap={dreamMap} onViewDream={setViewDreamId} />
 
           {/* Tag evolution */}
           <TagEvolution series={series} dreamMap={dreamMap} />
 
-          {/* Added dream list */}
+          {/* Added dream list — click the title to view, click × to remove from series */}
           {series.dreamIds.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {series.dreamIds.map((id) => {
@@ -205,14 +222,21 @@ function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allD
                 return (
                   <span
                     key={id}
-                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                    className="inline-flex items-center gap-0.5 text-[11px] rounded-full bg-muted text-muted-foreground overflow-hidden"
                   >
-                    {dream.title}
+                    <button
+                      onClick={() => setViewDreamId(id)}
+                      className="pl-2 pr-1 py-0.5 hover:text-foreground hover:bg-muted/60 transition-colors"
+                      title="View dream content"
+                    >
+                      {dream.title}
+                    </button>
                     <button
                       onClick={() => removeDreamFromSeries(series.id, id)}
-                      className="opacity-60 hover:opacity-100"
+                      className="pr-1.5 pl-0.5 py-0.5 opacity-60 hover:opacity-100 hover:text-destructive transition-colors"
+                      title="Remove from series"
                     >
-                      <X className="h-2.5 w-2.5" />
+                      <X className="h-3 w-3" />
                     </button>
                   </span>
                 );
@@ -274,6 +298,21 @@ function SeriesCard({ series, allDreams, dreamMap }: { series: DreamSeries; allD
             />
           </div>
         </CardContent>
+      )}
+
+      {/* Inline dream viewer — shared across the timeline nodes and the dream
+          badge titles. Edit button hands off to the global editor modal so
+          the user can jump straight into editing the dream. */}
+      {viewDream && (
+        <DreamViewer
+          dream={viewDream}
+          open={true}
+          onClose={() => setViewDreamId(null)}
+          onEdit={() => {
+            setViewDreamId(null);
+            openEditor(viewDream.id);
+          }}
+        />
       )}
     </Card>
   );

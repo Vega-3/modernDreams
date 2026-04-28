@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  FolderOpen, Upload, Check, KeyRound, Loader2, X, AlertCircle,
+  Upload, Check, KeyRound, Loader2, X, AlertCircle,
   Palette, FileCode, SwatchBook,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { exportToObsidian, getObsidianPath, verifyApiKey, updateTag } from '@/lib/tauri';
+import { verifyApiKey, updateTag } from '@/lib/tauri';
 import { friendlyApiError } from '@/lib/apiError';
 import { useThemeStore, THEME_CONFIGS, FONT_STACKS, type ThemeConfig, type FontFamily } from '@/stores/themeStore';
 import { useTagStore } from '@/stores/tagStore';
@@ -23,13 +23,6 @@ const FONTS: { id: FontFamily; label: string; preview: string }[] = [
 
 
 export function SettingsPage() {
-  const [vaultPath, setVaultPath] = useState<string>('');
-
-  // Load the Obsidian vault path from the Tauri backend on mount
-  useEffect(() => {
-    getObsidianPath().then(setVaultPath).catch(() => {});
-  }, []);
-
   // ── API Key ──────────────────────────────────────────────────────────────
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
   const [apiKeySaved, setApiKeySaved] = useState(false);
@@ -54,28 +47,6 @@ export function SettingsPage() {
     } catch (err) {
       setTestState('error');
       setTestError(friendlyApiError(String(err)));
-    }
-  };
-
-  // ── Obsidian export ──────────────────────────────────────────────────────
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportResult, setExportResult] = useState<{
-    success: boolean;
-    count?: number;
-    path?: string;
-    error?: string;
-  } | null>(null);
-
-  const handleExport = async () => {
-    setIsExporting(true);
-    setExportResult(null);
-    try {
-      const result = await exportToObsidian();
-      setExportResult({ success: true, count: result.exported_count, path: result.vault_path });
-    } catch (error) {
-      setExportResult({ success: false, error: String(error) });
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -474,89 +445,6 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* ── Obsidian Export ──────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FolderOpen className="h-5 w-5" />
-            Obsidian Export
-          </CardTitle>
-          <CardDescription>
-            Export your dreams to an Obsidian vault for advanced note-taking and graph visualization
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border bg-muted/50 p-4">
-            <p className="text-sm font-medium mb-2">Export Location</p>
-            <code className="text-sm text-muted-foreground">
-              {vaultPath || 'Loading…'}
-            </code>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium">What gets exported:</p>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>- All dreams as Markdown files with YAML frontmatter</li>
-              <li>- Tags organized by category with backlinks</li>
-              <li>- Wikilinks for easy navigation</li>
-              <li>- Dataview-compatible metadata for queries</li>
-            </ul>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Vault Structure:</p>
-            <pre className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
-{`vault/
-├── Dreams/
-│   └── 2025/
-│       └── 01-January/
-│           └── 2025-01-15-dream-title.md
-├── Tags/
-│   ├── Locations/
-│   ├── People/
-│   ├── Symbolic/
-│   └── Emotive/
-└── _index.md`}
-            </pre>
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center gap-4">
-            <Button onClick={handleExport} disabled={isExporting}>
-              {isExporting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Export to Obsidian
-                </>
-              )}
-            </Button>
-
-            {exportResult && (
-              <div
-                className={`flex items-center gap-2 text-sm ${
-                  exportResult.success ? 'text-green-500' : 'text-destructive'
-                }`}
-              >
-                {exportResult.success ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    Exported {exportResult.count} dreams
-                  </>
-                ) : (
-                  <span>{exportResult.error}</span>
-                )}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* ── About ────────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
@@ -581,7 +469,6 @@ export function SettingsPage() {
               <li>- Visual customization with theme switching and custom CSS</li>
               <li>- Full-text search across all dreams</li>
               <li>- Handwriting scan via Claude AI</li>
-              <li>- Obsidian vault export</li>
             </ul>
           </div>
 

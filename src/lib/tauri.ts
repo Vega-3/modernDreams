@@ -94,11 +94,6 @@ export interface SearchResult {
   total: number;
 }
 
-export interface ExportResult {
-  exported_count: number;
-  vault_path: string;
-}
-
 // Dream commands
 export const getDreams = () => invoke<Dream[]>('get_dreams');
 export const getDream = (id: string) => invoke<Dream | null>('get_dream', { id });
@@ -119,10 +114,6 @@ export const getTagWordAssociations = (tagId: string) =>
 
 // Search commands
 export const searchDreams = (query: SearchQuery) => invoke<SearchResult>('search_dreams', { query });
-
-// Obsidian commands
-export const exportToObsidian = () => invoke<ExportResult>('export_to_obsidian');
-export const getObsidianPath = () => invoke<string>('get_obsidian_path');
 
 // OCR commands (legacy — kept for reference, replaced by Claude AI below)
 export const recognizeHandwriting = (imageBase64: string) =>

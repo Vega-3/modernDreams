@@ -1,39 +1,21 @@
-use crate::db::DbConnection;
-use rusqlite::params;
+//! Thin Tauri wrappers delegating to `dreams_core::theme`.
+
+use dreams_core::theme as core;
 use tauri::State;
 
-/// Return the saved notes for `tag_id`, or an empty string if none exist yet.
+use super::{backend, to_ipc_err};
+use crate::AppState;
+
 #[tauri::command]
-pub fn get_tag_notes(tag_id: String, db: State<'_, DbConnection>) -> Result<String, String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    let notes: String = conn
-        .query_row(
-            "SELECT notes FROM tag_notes WHERE tag_id = ?1",
-            params![tag_id],
-            |row| row.get(0),
-        )
-        .unwrap_or_default();
-    Ok(notes)
+pub fn get_tag_notes(tag_id: String, state: State<'_, AppState>) -> Result<String, String> {
+    core::get_tag_notes(backend(&state), &tag_id).map_err(to_ipc_err)
 }
 
-/// Upsert the notes for `tag_id`.
 #[tauri::command]
 pub fn save_tag_notes(
     tag_id: String,
     notes: String,
-    db: State<'_, DbConnection>,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let conn = db.0.lock().map_err(|e| e.to_string())?;
-    conn.execute(
-        r#"
-        INSERT INTO tag_notes (tag_id, notes, updated_at)
-        VALUES (?1, ?2, CURRENT_TIMESTAMP)
-        ON CONFLICT(tag_id) DO UPDATE
-            SET notes = excluded.notes,
-                updated_at = CURRENT_TIMESTAMP
-        "#,
-        params![tag_id, notes],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
+    core::save_tag_notes(backend(&state), &tag_id, &notes).map_err(to_ipc_err)
 }

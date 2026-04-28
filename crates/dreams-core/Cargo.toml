@@ -1,0 +1,29 @@
+[package]
+name = "dreams-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Platform-independent backend for the Dreams journal app (Tauri-free, FFI-friendly)"
+
+[lib]
+name = "dreams_core"
+
+[features]
+# Default: include everything the desktop needs.
+default = ["python-analysis"]
+
+# Enables the optional Python subprocess runner used by `graph::analyze`.
+# Turn off for mobile targets (iOS/Android) where Python is not available;
+# pure-Rust graph construction in `graph::build_graph_input` still works.
+python-analysis = []
+
+[dependencies]
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+base64.workspace = true
+reqwest.workspace = true
+tokio.workspace = true

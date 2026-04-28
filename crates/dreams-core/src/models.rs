@@ -1,3 +1,7 @@
+//! Serialisable domain types shared between every frontend (Tauri IPC, FFI
+//! JSON bridge, future HTTP server). Keeping them in one place keeps the
+//! wire format uniform across platforms.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,10 +164,4 @@ pub struct SearchQuery {
 pub struct SearchResult {
     pub dreams: Vec<Dream>,
     pub total: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExportResult {
-    pub exported_count: i32,
-    pub vault_path: String,
 }

@@ -1,3 +1,12 @@
+//! Idempotent SQL migrations.
+//!
+//! The schema is defined as a single `CREATE TABLE IF NOT EXISTS` batch so
+//! fresh installs get everything in one transaction, and each additive change
+//! (new column, new table) is a standalone `ALTER TABLE` wrapped in `let _ =`
+//! so it silently succeeds when the column already exists. This is the shape
+//! the desktop app has been running in production, so preserving it exactly
+//! keeps existing user databases compatible.
+
 use rusqlite::{Connection, Result};
 
 pub fn run_migrations(conn: &Connection) -> Result<()> {
@@ -93,36 +102,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         "#,
     )?;
 
-    // Additive migration: add aliases column to existing databases.
-    // Silently ignored if the column already exists (fresh DB has it from CREATE TABLE).
+    // Additive migrations. Each is wrapped in `let _` so "duplicate column"
+    // on already-migrated databases is silently swallowed — this is the only
+    // path to stay compatible with the desktop app's existing user DBs.
     let _ = conn.execute(
         "ALTER TABLE tags ADD COLUMN aliases TEXT NOT NULL DEFAULT '[]'",
         [],
     );
+    let _ = conn.execute("ALTER TABLE dreams ADD COLUMN waking_life_context TEXT", []);
+    let _ = conn.execute("ALTER TABLE dreams ADD COLUMN analysis_notes TEXT", []);
+    let _ = conn.execute("ALTER TABLE tags ADD COLUMN emotive_subcategory TEXT", []);
 
-    // Additive migration: add waking_life_context column to existing databases.
-    // Silently ignored if the column already exists (fresh DB has it from CREATE TABLE).
-    let _ = conn.execute(
-        "ALTER TABLE dreams ADD COLUMN waking_life_context TEXT",
-        [],
-    );
-
-  
-
-    // Additive migration: add analysis_notes column to existing databases.
-    let _ = conn.execute(
-        "ALTER TABLE dreams ADD COLUMN analysis_notes TEXT",
-        [],
-    );
-
-    // Additive migration: add emotive_subcategory column to tags.
-    let _ = conn.execute(
-        "ALTER TABLE tags ADD COLUMN emotive_subcategory TEXT",
-        [],
-    );
-
-  // Additive migration: tag notes for the Theme Analysis page.
-    // Using CREATE TABLE IF NOT EXISTS so it is safe to run on every startup.
+    // Tag notes for the Theme Analysis page.
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS tag_notes (
@@ -133,19 +124,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         "#,
     )?;
 
-    // Additive migration: paragraph_index on word_tag_associations.
     let _ = conn.execute(
         "ALTER TABLE word_tag_associations ADD COLUMN paragraph_index INTEGER NOT NULL DEFAULT 0",
         [],
     );
-
-    // Additive migration: meaningfulness_rating on dreams.
-    let _ = conn.execute(
-        "ALTER TABLE dreams ADD COLUMN meaningfulness_rating INTEGER",
-        [],
-    );
-
-    // Additive migration: source column on word_tag_associations (manual vs auto).
+    let _ = conn.execute("ALTER TABLE dreams ADD COLUMN meaningfulness_rating INTEGER", []);
     let _ = conn.execute(
         "ALTER TABLE word_tag_associations ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'",
         [],
