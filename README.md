@@ -1,6 +1,6 @@
 # Dreams - Dream Tracker Application
 
-A full-stack desktop application for dream analysis with rich tagging, calendar views, network graph visualization, and Obsidian vault integration.
+A full-stack desktop application for dream analysis with rich tagging, calendar views, and network graph visualization.
 
 ## Technology Stack
 

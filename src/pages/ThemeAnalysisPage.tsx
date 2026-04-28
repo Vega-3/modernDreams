@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import cytoscape, { Core } from 'cytoscape';
+import ForceGraph3D from '3d-force-graph';
+import type { NodeObject, LinkObject } from '3d-force-graph';
+import * as THREE from 'three';
+import { ChevronLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -63,66 +66,81 @@ export function ThemeAnalysisPage() {
 
   const sortedTags = useMemo(() => sortByName(tags), [tags]);
 
+  // Dream count per tag — drives the index page count column
+  const dreamCountByTagId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const dream of dreams) {
+      for (const t of dream.tags) {
+        map.set(t.id, (map.get(t.id) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [dreams]);
+
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
-      {/* ── Tag selector ──────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <Label className="shrink-0 text-sm">Select tag</Label>
-        <Select
-          value={selectedTag?.id ?? ''}
-          onValueChange={(id) => {
-            const tag = tags.find((t) => t.id === id) ?? null;
-            setSelectedTag(tag);
-          }}
-        >
-          <SelectTrigger className="w-56">
-            <SelectValue placeholder="Choose a tag…" />
-          </SelectTrigger>
-          <SelectContent>
-            {sortedTags.map((tag) => (
-              <SelectItem key={tag.id} value={tag.id}>
-                <span className="flex items-center gap-2">
+
+      {selectedTag ? (
+        // ── Analysis view ──────────────────────────────────────────────────
+        <>
+          {/* Back button + active tag label */}
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 px-2"
+              onClick={() => setSelectedTag(null)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              All tags
+            </Button>
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: selectedTag.color }}
+            />
+            <span className="text-sm font-semibold">{selectedTag.name}</span>
+            <span className="text-xs text-muted-foreground">
+              {tagDreams.length} dream{tagDreams.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Tripartite panels */}
+          <div className="flex-1 grid grid-cols-3 gap-3 min-h-0">
+            <NotesPanel tag={selectedTag} notes={notes} onNotesChange={handleNotesChange} />
+            <DreamPanel
+              tag={selectedTag}
+              dreams={tagDreams}
+              selectedDream={selectedDream}
+              onSelectDream={setSelectedDream}
+            />
+            <ConstellationPanel tag={selectedTag} dreams={tagDreams} allTags={tags} />
+          </div>
+        </>
+      ) : (
+        // ── Tag index ──────────────────────────────────────────────────────
+        // All tags in 5 columns, alphabetical, with dream count on the right.
+        <div className="overflow-y-auto flex-1">
+          <div className="grid grid-cols-5 gap-x-3 gap-y-0.5">
+            {sortedTags.map((tag) => {
+              const count = dreamCountByTagId.get(tag.id) ?? 0;
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => setSelectedTag(tag)}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-accent transition-colors"
+                >
                   <span
-                    className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                    className="inline-block w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: tag.color }}
                   />
-                  {tag.name}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {selectedTag && (
-          <span className="text-xs text-muted-foreground">
-            {tagDreams.length} dream{tagDreams.length !== 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-
-      {/* ── Tripartite view ───────────────────────────────────────────────── */}
-      {selectedTag ? (
-        <div className="flex-1 grid grid-cols-3 gap-3 min-h-0">
-          {/* Panel 1 — Notes */}
-          <NotesPanel
-            tag={selectedTag}
-            notes={notes}
-            onNotesChange={handleNotesChange}
-          />
-
-          {/* Panel 2 — Dream viewer */}
-          <DreamPanel
-            tag={selectedTag}
-            dreams={tagDreams}
-            selectedDream={selectedDream}
-            onSelectDream={setSelectedDream}
-          />
-
-          {/* Panel 3 — Constellation */}
-          <ConstellationPanel tag={selectedTag} dreams={tagDreams} allTags={tags} />
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          Select a tag above to begin your analysis.
+                  <span className="text-sm flex-1 truncate">{tag.name}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -232,10 +250,34 @@ function DreamPanel({
   );
 }
 
+// ── Label sprite helper (shared texture cache) ────────────────────────────────
+
+const _labelTextureCache = new Map<string, THREE.Texture>();
+function getLabelTexture(text: string): THREE.Texture {
+  if (_labelTextureCache.has(text)) return _labelTextureCache.get(text)!;
+  const canvas = document.createElement('canvas');
+  const fontSize = 30;
+  const padding = 10;
+  canvas.height = fontSize + padding * 3;
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = `${fontSize}px sans-serif`;
+  canvas.width = Math.ceil(ctx.measureText(text).width) + padding * 2 + 16;
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.shadowColor = 'rgba(255, 255, 255, 0.75)';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillText(text, padding + 8, fontSize + padding);
+  ctx.shadowBlur = 6;
+  ctx.fillText(text, padding + 8, fontSize + padding);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,255,255,1)';
+  ctx.fillText(text, padding + 8, fontSize + padding);
+  const texture = new THREE.CanvasTexture(canvas);
+  _labelTextureCache.set(text, texture);
+  return texture;
+}
+
 // ── Panel 3: Constellation ────────────────────────────────────────────────────
-// Tags are arranged concentrically by co-occurrence frequency:
-// the innermost ring holds the closest psychological associates,
-// the outer rings hold peripheral resonances.
 
 function ConstellationPanel({
   tag,
@@ -247,9 +289,10 @@ function ConstellationPanel({
   allTags: Tag[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const cyRef = useRef<Core | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const graphRef = useRef<any>(null);
+  const fittedRef = useRef(false);
 
-  // Compute co-occurring tags and edge weights from the dreams list.
   const coTagMap = useMemo(() => {
     const map = new Map<string, { tag: Tag; weight: number }>();
     const tagById = new Map(allTags.map((t) => [t.id, t]));
@@ -259,125 +302,98 @@ function ConstellationPanel({
         const full = tagById.get(dt.id);
         if (!full) continue;
         const existing = map.get(dt.id);
-        if (existing) {
-          existing.weight += 1;
-        } else {
-          map.set(dt.id, { tag: full, weight: 1 });
-        }
+        if (existing) existing.weight += 1;
+        else map.set(dt.id, { tag: full, weight: 1 });
       }
     }
     return map;
   }, [dreams, tag, allTags]);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const centerColor = getCategoryColor(tag.category);
-    const coEntries = Array.from(coTagMap.entries());
-
-    // Assign concentric levels by co-occurrence frequency.
-    // Higher weight = lower level number = placed on inner ring.
-    const maxWeight = coEntries.reduce((m, [, { weight }]) => Math.max(m, weight), 1);
-
-    // Map weight to a concentric level: innermost ring = 3, middle = 2, outer = 1
-    const getLevel = (weight: number): number => {
-      const ratio = weight / maxWeight;
-      if (ratio >= 0.66) return 3;
-      if (ratio >= 0.33) return 2;
-      return 1;
-    };
-
+  const graphData = useMemo(() => {
     const nodes = [
-      {
-        data: {
-          id: 'center',
-          label: tag.name,
-          color: centerColor,
-          size: 36,
-          level: 10, // center is always innermost
-          isCenter: true,
-        },
-      },
-      ...coEntries.map(([id, { tag: ct, weight }]) => ({
-        data: {
-          id,
-          label: ct.name,
-          color: getCategoryColor(ct.category),
-          size: Math.max(16, Math.min(28, 12 + weight * 2.5)),
-          weight,
-          level: getLevel(weight),
-        },
+      { id: 'center', name: tag.name, color: getCategoryColor(tag.category), size: 10 },
+      ...Array.from(coTagMap.entries()).map(([id, { tag: ct, weight }]) => ({
+        id,
+        name: ct.name,
+        color: getCategoryColor(ct.category),
+        size: Math.max(4, Math.min(8, 3 + weight * 1.5)),
       })),
     ];
-
-    const edges = coEntries.map(([id, { weight }]) => ({
-      data: {
-        id: `e-${id}`,
-        source: 'center',
-        target: id,
-        weight,
-      },
+    const links = Array.from(coTagMap.entries()).map(([id, { weight }]) => ({
+      source: 'center',
+      target: id,
+      weight,
     }));
+    return { nodes, links };
+  }, [tag, coTagMap]);
 
-    const cy = cytoscape({
-      container: containerRef.current,
-      elements: [...nodes, ...edges],
-      style: [
-        {
-          selector: 'node',
-          style: {
-            label: 'data(label)',
-            'background-color': 'data(color)',
-            width: 'data(size)',
-            height: 'data(size)',
-            shape: 'ellipse',
-            'text-valign': 'bottom',
-            'text-halign': 'center',
-            'font-size': '9px',
-            color: '#a0a0b0',
-            'text-margin-y': 4,
-          },
-        },
-        {
-          selector: 'node[?isCenter]',
-          style: {
-            'border-width': 3,
-            'border-color': 'data(color)',
-            'font-size': '11px',
-            color: '#e0e0f0',
-            'font-weight': 'bold',
-          },
-        },
-        {
-          selector: 'edge',
-          style: {
-            width: 'mapData(weight, 1, 10, 1, 4)',
-            'line-color': '#3d0a0d',
-            'curve-style': 'bezier',
-            opacity: 0.5,
-          },
-        },
-      ],
-      layout:
-        coEntries.length === 0
-          ? { name: 'grid' }
-          : {
-              name: 'concentric',
-              concentric: (node: { data: (key: string) => number }) => node.data('level'),
-              levelWidth: () => 1,
-              minNodeSpacing: 20,
-              padding: 28,
-              startAngle: (3 / 2) * Math.PI,
-              sweep: undefined,
-              clockwise: true,
-              equidistant: false,
-              avoidOverlap: true,
-            },
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const graph = new ForceGraph3D(container, { rendererConfig: { antialias: true } })
+      .width(Math.max(container.offsetWidth, 200))
+      .height(Math.max(container.offsetHeight, 200))
+      .backgroundColor('#08080f')
+      .showNavInfo(false)
+      .nodeId('id')
+      .nodeLabel('name')
+      .nodeVal((node: NodeObject) => { const n = node as any; return n.size * n.size; })
+      .nodeColor((node: NodeObject) => (node as any).color)
+      .nodeOpacity(0.92)
+      .nodeResolution(12)
+      .nodeThreeObject((node: NodeObject) => {
+        const n = node as any;
+        const texture = getLabelTexture(n.name);
+        const spriteMat = new THREE.SpriteMaterial({
+          map: texture, transparent: true, depthWrite: false, depthTest: false,
+        });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.renderOrder = 999;
+        const img = texture.image as HTMLCanvasElement;
+        sprite.scale.set(img.width / 4, img.height / 4, 1);
+        sprite.position.set(0, n.size + (img.height / 4) / 2 + 1, 0);
+        return sprite;
+      })
+      .nodeThreeObjectExtend(true)
+      .linkSource('source')
+      .linkTarget('target')
+      .linkColor(() => '#ccccee')
+      .linkOpacity(0.35)
+      .linkWidth((link: LinkObject) => Math.min((link as any).weight * 0.6, 2.5))
+      .linkDirectionalParticles(0)
+      .onEngineStop(() => {
+        const nodeCount = (graph.graphData() as any).nodes?.length ?? 0;
+        if (nodeCount > 0 && !fittedRef.current) {
+          fittedRef.current = true;
+          graph.zoomToFit(600, 40);
+        }
+      })
+      .graphData(graphData as any);
+
+    graphRef.current = graph;
+
+    const observer = new ResizeObserver(() => {
+      if (graphRef.current && container) {
+        graphRef.current.width(container.offsetWidth).height(container.offsetHeight);
+      }
     });
+    observer.observe(container);
 
-    cyRef.current = cy;
-    return () => cy.destroy();
-  }, [tag, dreams, allTags, coTagMap]);
+    return () => {
+      observer.disconnect();
+      try { graph._destructor(); } catch { /* ignore */ }
+      container.innerHTML = '';
+      graphRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!graphRef.current) return;
+    fittedRef.current = false;
+    graphRef.current.graphData(graphData as any);
+  }, [graphData]);
 
   return (
     <Card className="flex flex-col overflow-hidden p-3 gap-2">
@@ -392,15 +408,11 @@ function ConstellationPanel({
           No co-occurring tags found for this theme.
         </p>
       ) : (
-        <>
-          <div
-            ref={containerRef}
-            className="flex-1 rounded-md border bg-card min-h-0 cytoscape-container"
-          />
-          <p className="text-[10px] text-muted-foreground/60 shrink-0 text-center">
-            Inner rings = closest associates · Outer rings = peripheral resonances
-          </p>
-        </>
+        <div
+          ref={containerRef}
+          className="flex-1 rounded-md border min-h-0 overflow-hidden"
+          style={{ background: '#08080f' }}
+        />
       )}
     </Card>
   );
