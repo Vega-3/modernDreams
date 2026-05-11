@@ -1,4 +1,4 @@
-# Dreams
+# Ipsacarta
 
 A local-first desktop app for dream journaling, depth psychology, and pattern analysis.
 Rich tagging, AI-assisted analysis, graph visualization, and full privacy — your data never leaves your machine.

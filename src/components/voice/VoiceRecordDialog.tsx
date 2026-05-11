@@ -30,7 +30,9 @@ function pickMimeType(): string {
     'audio/ogg;codecs=opus',
     'audio/webm',
     'audio/ogg',
-    'audio/mp4',
+    // audio/mp4 intentionally omitted: Anthropic does not accept it.
+    // macOS WebKit falls through to the empty string and MediaRecorder uses
+    // its default (AAC/MP4), which we remap to audio/aac in apiMime().
   ];
   for (const t of candidates) {
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) return t;
@@ -38,9 +40,30 @@ function pickMimeType(): string {
   return '';
 }
 
-/** Strip codec suffix for the Anthropic API — it only accepts the bare MIME. */
-function baseMime(mimeType: string): string {
-  return mimeType.split(';')[0];
+/**
+ * Map a browser MIME type to one the Anthropic API accepts.
+ * Strips codec suffixes, and remaps audio/mp4 → audio/aac because the
+ * Anthropic API accepts the codec name, not the container format.
+ */
+function apiMime(mimeType: string): string {
+  const base = mimeType.split(';')[0];
+  if (base === 'audio/mp4') return 'audio/aac';
+  return base || 'audio/webm';
+}
+
+/**
+ * Encode an ArrayBuffer to base64 in 8 KB chunks to avoid spreading
+ * a huge Uint8Array as function arguments (hits V8's ~65k arg-count limit
+ * and throws RangeError for any recording longer than ~10 seconds).
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
 }
 
 /** Format elapsed seconds as M:SS. */
@@ -59,7 +82,7 @@ function defaultTitle(): string {
 }
 
 export function VoiceRecordDialog({ open, onClose, onDreamSaved }: VoiceRecordDialogProps) {
-  const { tags } = useTagStore();
+  const { tags, fetchTags } = useTagStore();
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [elapsed, setElapsed] = useState(0);
@@ -79,6 +102,9 @@ export function VoiceRecordDialog({ open, onClose, onDreamSaved }: VoiceRecordDi
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Ensure tags are loaded even if the user hasn't visited the Tags page yet.
+  useEffect(() => { if (open) fetchTags(); }, [open, fetchTags]);
 
   // Reset all state when dialog opens/closes
   useEffect(() => {
@@ -171,10 +197,10 @@ export function VoiceRecordDialog({ open, onClose, onDreamSaved }: VoiceRecordDi
 
     const blob = new Blob(chunks, { type: mimeType });
     const arrayBuffer = await blob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const base64 = arrayBufferToBase64(arrayBuffer);
 
     try {
-      const result = await transcribeVoiceClaude(base64, baseMime(mimeType), apiKey);
+      const result = await transcribeVoiceClaude(base64, apiMime(mimeType), apiKey);
       setTitle(defaultTitle());
       setContent(result.english_transcript);
       setDreamDate(todayIso());
