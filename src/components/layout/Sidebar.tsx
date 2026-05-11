@@ -1,4 +1,4 @@
-import { Moon, BookOpen, Calendar, Network, Tags, Microscope, Layers, GitBranch, Briefcase, Settings, PanelLeftClose, PanelLeft, HelpCircle } from 'lucide-react';
+import { BookOpen, Calendar, Network, Tags, Microscope, Layers, GitBranch, Briefcase, Settings, PanelLeftClose, PanelLeft, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -31,10 +31,25 @@ export function Sidebar() {
         {/* Header */}
         <div className="flex h-14 items-center border-b px-4">
           <div className={cn('flex items-center gap-2', sidebarCollapsed && 'justify-center w-full')}>
-            <Moon className="h-6 w-6 text-primary drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]" />
+            <svg className="logo-mark h-6 w-6 shrink-0" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Ipsacarta">
+                <g stroke="currentColor" stroke-linecap="round">
+                  <line x1="60" y1="14" x2="95" y2="36" stroke-width="1.8" stroke-opacity="0.55"/>
+                  <line x1="95" y1="36" x2="87" y2="78" stroke-width="1.8" stroke-opacity="0.55"/>
+                  <line x1="87" y1="78" x2="42" y2="94" stroke-width="1.8" stroke-opacity="0.55"/>
+                  <line x1="42" y1="94" x2="18" y2="56" stroke-width="1.8" stroke-opacity="0.55"/>
+                  <line x1="18" y1="56" x2="60" y2="14" stroke-width="1.8" stroke-opacity="0.55"/>
+                  <line x1="60" y1="14" x2="87" y2="78" stroke-width="1" stroke-opacity="0.22"/>
+                  <line x1="95" y1="36" x2="42" y2="94" stroke-width="1" stroke-opacity="0.22"/>
+                </g>
+                <circle cx="60"  cy="14" r="5"   fill="currentColor"/>
+                <circle cx="95"  cy="36" r="4"   fill="currentColor" opacity="0.85"/>
+                <circle cx="87"  cy="78" r="5"   fill="currentColor"/>
+                <circle cx="42"  cy="94" r="4"   fill="currentColor" opacity="0.85"/>
+                <circle cx="18"  cy="56" r="4"   fill="currentColor" opacity="0.85"/>
+              </svg>
             {!sidebarCollapsed && (
               <span className="font-p5 text-lg tracking-tight text-foreground">
-                DREAMS
+                IPSACARTA
               </span>
             )}
           </div>

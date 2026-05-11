@@ -4,7 +4,7 @@ import type { NodeObject, LinkObject } from '3d-force-graph';
 import * as THREE from 'three';
 // @ts-ignore — d3-force-3d ships no type declarations; it is a transitive dep of 3d-force-graph
 import { forceCollide } from 'd3-force-3d';
-import { Eye, EyeOff, HelpCircle, Maximize2, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, Maximize2, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { useDreamStore } from '@/stores/dreamStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useThemeStore, THEME_CONFIGS, type TagCategoryKey } from '@/stores/themeStore';
+import { getParagraphCoOccurrences, type ParagraphCoOccurrence } from '@/lib/tauri';
 import { GraphStats } from './GraphStats';
 
 // ── Group definitions ────────────────────────────────────────────────────────
@@ -56,10 +57,18 @@ interface GNode extends NodeObject {
   dreamId?: string;
 }
 
+interface SharedDreamRef {
+  id: string;
+  title: string;
+  date: string;
+}
+
 interface GLink extends LinkObject<GNode> {
   linkType: 'dream-tag' | 'tag-tag';
   /** Co-occurrence count for tag-tag edges, 1 for dream-tag */
   weight: number;
+  /** Dreams that contain both endpoint tags — populated for tag-tag edges only. */
+  sharedDreams?: SharedDreamRef[];
 }
 
 // ── Focus-highlight helpers ───────────────────────────────────────────────────
@@ -137,16 +146,28 @@ export function GraphView() {
   const [hiddenGroups, setHiddenGroups] = useState<Set<GroupKey>>(new Set());
   const [startDate, setStartDate] = useState(oneYearAgo());
   const [endDate, setEndDate] = useState(today());
+  const [paraCoOccurrences, setParaCoOccurrences] = useState<ParagraphCoOccurrence[]>([]);
   // Defaults chosen so the 3-D force mapping produces well-separated initial layouts:
   // repelStrength 80000 → d3 charge ≈ -320; linkStrength 0.001 → link dist ≈ 200
   const [repelStrength, setRepelStrength] = useState(80000);
   const [linkStrength, setLinkStrength] = useState(0.001);
   const [showControls, setShowControls] = useState(false);
+  const [edgePanel, setEdgePanel] = useState<{
+    sourceName: string;
+    targetName: string;
+    dreams: SharedDreamRef[];
+  } | null>(null);
 
   useEffect(() => {
     fetchDreams();
     fetchTags();
   }, [fetchDreams, fetchTags]);
+
+  useEffect(() => {
+    getParagraphCoOccurrences(startDate, endDate)
+      .then(setParaCoOccurrences)
+      .catch(console.error);
+  }, [startDate, endDate]);
 
   const toggleGroup = (group: GroupKey) => {
     setHiddenGroups((prev) => {
@@ -160,7 +181,6 @@ export function GraphView() {
   const graphData = useMemo<{ nodes: GNode[]; links: GLink[] }>(() => {
     const nodes: GNode[] = [];
     const links: GLink[] = [];
-    const tagCoOccurrence = new Map<string, Map<string, number>>();
 
     const showDreams    = !hiddenGroups.has('dreams');
     const visibleCatSet = new Set(ALL_GROUPS.filter(g => g !== 'dreams' && !hiddenGroups.has(g)));
@@ -203,18 +223,6 @@ export function GraphView() {
           } as GLink);
         });
       }
-
-      // Co-occurrence (computed even when dream nodes are hidden)
-      for (let i = 0; i < dreamTags.length; i++) {
-        for (let j = i + 1; j < dreamTags.length; j++) {
-          const a = dreamTags[i].id;
-          const b = dreamTags[j].id;
-          if (!tagCoOccurrence.has(a)) tagCoOccurrence.set(a, new Map());
-          if (!tagCoOccurrence.has(b)) tagCoOccurrence.set(b, new Map());
-          tagCoOccurrence.get(a)!.set(b, (tagCoOccurrence.get(a)!.get(b) ?? 0) + 1);
-          tagCoOccurrence.get(b)!.set(a, (tagCoOccurrence.get(b)!.get(a) ?? 0) + 1);
-        }
-      }
     });
 
     // Tag nodes — only for tags referenced by at least one dream in the current window
@@ -231,26 +239,31 @@ export function GraphView() {
         });
       });
 
-    // Tag–tag co-occurrence edges — higher threshold trims low-signal edges
-    const coEdgeThreshold = showDreams ? 3 : 2;
+    // Tag–tag edges from paragraph co-occurrences only.
+    // Trigger: two tags sharing a paragraph share a narrative moment; dream-level
+    //          co-occurrence is too coarse — they may describe unrelated scenes.
     const addedEdges = new Set<string>();
-    tagCoOccurrence.forEach((coTags, tagId) => {
-      coTags.forEach((count, coTagId) => {
-        const edgeKey = [tagId, coTagId].sort().join('-');
-        if (!addedEdges.has(edgeKey) && count >= coEdgeThreshold) {
-          addedEdges.add(edgeKey);
-          links.push({
-            source: `tag-${tagId}`,
-            target: `tag-${coTagId}`,
-            linkType: 'tag-tag',
-            weight: count,
-          } as GLink);
-        }
-      });
+    paraCoOccurrences.forEach(({ a, b, count }) => {
+      if (!referencedTagIds.has(a) || !referencedTagIds.has(b)) return;
+      const edgeKey = [a, b].sort().join('-');
+      if (!addedEdges.has(edgeKey)) {
+        addedEdges.add(edgeKey);
+        // Collect dreams that contain both tags so clicking the edge can show them.
+        const sharedDreams: SharedDreamRef[] = filteredDreams
+          .filter(d => d.tags.some(t => t.id === a) && d.tags.some(t => t.id === b))
+          .map(d => ({ id: d.id, title: d.title, date: d.dream_date.slice(0, 10) }));
+        links.push({
+          source: `tag-${a}`,
+          target: `tag-${b}`,
+          linkType: 'tag-tag',
+          weight: count,
+          sharedDreams,
+        } as GLink);
+      }
     });
 
     return { nodes, links };
-  }, [dreams, tags, hiddenGroups, startDate, endDate]);
+  }, [dreams, tags, hiddenGroups, startDate, endDate, paraCoOccurrences]);
 
   // ── Initialise the 3D graph (once) ────────────────────────────────────────
   useEffect(() => {
@@ -306,7 +319,24 @@ export function GraphView() {
         const l = link as GLink;
         return l.linkType === 'tag-tag' ? Math.min(l.weight * 0.6, 2.5) : 0.5;
       })
-      .linkDirectionalParticles(0);
+      .linkDirectionalParticles(0)
+      // Hover tooltip — shows tag names + shared entry count for tag-tag edges.
+      .linkLabel((link: LinkObject) => {
+        const l = link as GLink;
+        if (l.linkType !== 'tag-tag') return '';
+        const src = typeof l.source === 'object' ? (l.source as GNode).name : '';
+        const tgt = typeof l.target === 'object' ? (l.target as GNode).name : '';
+        const n = l.sharedDreams?.length ?? 0;
+        return `${src} ↔ ${tgt} · ${n} shared ${n === 1 ? 'entry' : 'entries'}`;
+      })
+      // Click — open the edge-detail panel listing shared dreams.
+      .onLinkClick((link: LinkObject) => {
+        const l = link as GLink;
+        if (l.linkType !== 'tag-tag') return;
+        const src = typeof l.source === 'object' ? (l.source as GNode).name : String(l.source);
+        const tgt = typeof l.target === 'object' ? (l.target as GNode).name : String(l.target);
+        setEdgePanel({ sourceName: src, targetName: tgt, dreams: l.sharedDreams ?? [] });
+      });
 
     // ── Focus-highlight helpers (close over `graph`) ───────────────────────
     const applyFocusColors = () => {
@@ -395,6 +425,7 @@ export function GraphView() {
       })
       .onBackgroundClick(() => {
         clearFocus();
+        setEdgePanel(null);
         graph.zoomToFit(600, 60);
       })
       // Auto-fit once the simulation settles — but only when we have real nodes.
@@ -558,6 +589,43 @@ export function GraphView() {
             className="absolute inset-0 rounded-lg border overflow-hidden"
             style={{ background: '#08080f' }}
           />
+          {/* Edge-detail panel — top-right of the canvas, visible when a tag-tag edge is clicked */}
+          {edgePanel && (
+            <div className="absolute top-3 right-3 z-20 w-64 rounded-lg border border-white/10
+                            bg-black/85 backdrop-blur-md p-3 shadow-xl">
+              <div className="flex items-start justify-between gap-2 mb-1.5">
+                <p className="text-xs font-semibold text-white/90 leading-snug">
+                  {edgePanel.sourceName} ↔ {edgePanel.targetName}
+                </p>
+                <button
+                  onClick={() => setEdgePanel(null)}
+                  className="shrink-0 text-white/40 hover:text-white/80 transition-colors mt-0.5"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <p className="text-xs text-white/50 mb-2">
+                {edgePanel.dreams.length} shared {edgePanel.dreams.length === 1 ? 'entry' : 'entries'}
+              </p>
+              <div className="space-y-0.5 max-h-52 overflow-y-auto">
+                {edgePanel.dreams.length === 0 ? (
+                  <p className="text-xs text-white/40 italic">No entries found in this window.</p>
+                ) : (
+                  edgePanel.dreams.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => { openEditorRef.current(d.id); setEdgePanel(null); }}
+                      className="w-full text-left rounded px-2 py-1.5 hover:bg-white/10 transition-colors"
+                    >
+                      <p className="text-xs font-medium text-white/90 truncate">{d.title}</p>
+                      <p className="text-xs text-white/45">{d.date}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Controls overlay — bottom-left of the canvas */}
           <div className="absolute bottom-3 left-3 z-10">
             <button
@@ -579,6 +647,7 @@ export function GraphView() {
                 <p className="text-white/60">Scroll &nbsp;—&nbsp; <span className="text-white/90">Zoom</span></p>
                 <p className="text-white/60">Click node &nbsp;—&nbsp; <span className="text-white/90">Focus neighbours</span></p>
                 <p className="text-white/60">Click again &nbsp;—&nbsp; <span className="text-white/90">Clear focus</span></p>
+                <p className="text-white/60">Click edge &nbsp;—&nbsp; <span className="text-white/90">See shared entries</span></p>
                 <p className="text-white/60">Dbl-click dream &nbsp;—&nbsp; <span className="text-white/90">Open editor</span></p>
                 <p className="text-white/60">Click background &nbsp;—&nbsp; <span className="text-white/90">Clear focus &amp; fit</span></p>
               </div>

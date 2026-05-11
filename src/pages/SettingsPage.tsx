@@ -448,12 +448,12 @@ export function SettingsPage() {
       {/* ── About ────────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>About Dreams</CardTitle>
+          <CardTitle>About Ipsacarta</CardTitle>
           <CardDescription>Version 0.1.0</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Dreams is a local-first dream journal application for recording, tagging, and analyzing
+            Ipsacarta is a local-first dream journal application for recording, tagging, and analyzing
             your dreams. Built with Tauri, React, and SQLite.
           </p>
 

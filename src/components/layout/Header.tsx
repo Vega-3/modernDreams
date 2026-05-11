@@ -1,4 +1,4 @@
-import { Search, Plus, Upload, Users, X } from 'lucide-react';
+import { Search, Plus, Upload, Mic, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,7 +23,7 @@ const viewTitles: Record<string, string> = {
 };
 
 export function Header() {
-  const { currentView, openSearch, openEditor, openHandwritingUpload } = useUIStore();
+  const { currentView, openSearch, openEditor, openHandwritingUpload, openVoiceRecord } = useUIStore();
   const { analystMode, clients, activeClientId, setActiveClient } = useAnalystStore();
 
   const activeClient = clients.find((c) => c.id === activeClientId) ?? null;
@@ -89,6 +89,15 @@ export function Header() {
 
         {currentView === 'journal' && (
           <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={openVoiceRecord}
+            >
+              <Mic className="h-4 w-4" />
+              <span className="hidden sm:inline">Voice Capture</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"

@@ -56,10 +56,13 @@ pub fn run() {
             commands::search::search_dreams,
             commands::ocr::recognize_handwriting,
             commands::claude::transcribe_handwriting_claude,
+            commands::claude::transcribe_voice_claude,
             commands::claude::verify_api_key,
             commands::claude::analyze_dream,
             commands::claude::ai_tag_dream,
+            commands::system::open_microphone_settings,
             commands::graph::get_graph_stats,
+            commands::graph::get_paragraph_co_occurrences,
             commands::theme::get_tag_notes,
             commands::theme::save_tag_notes,
         ])

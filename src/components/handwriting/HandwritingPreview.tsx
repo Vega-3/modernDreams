@@ -210,6 +210,9 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
         is_lucid: currentForm.isLucid,
         mood_rating: currentForm.moodRating,
         clarity_rating: currentForm.clarityRating,
+        meaningfulness_rating: null,
+        waking_life_context: null,
+        analysis_notes: null,
         tag_ids: currentForm.tags.map((t) => t.id),
         word_tag_associations: wordTagAssociations,
       });
@@ -243,6 +246,9 @@ export function HandwritingPreview({ open, onClose, recognizedDreams }: Handwrit
             is_lucid: form.isLucid,
             mood_rating: form.moodRating,
             clarity_rating: form.clarityRating,
+            meaningfulness_rating: null,
+            waking_life_context: null,
+            analysis_notes: null,
             tag_ids: form.tags.map((t) => t.id),
             word_tag_associations: i === currentIndex ? editorAssociations : [],
           });

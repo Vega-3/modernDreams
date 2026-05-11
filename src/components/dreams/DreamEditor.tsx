@@ -64,7 +64,7 @@ function makeInlineTagExtension(allTagsRef: React.MutableRefObject<Tag[]>) {
       return [
         new InputRule({
           find: /\[\[([^\]]+)\]\]$/,
-          handler({ state, range, match, tr }) {
+          handler({ state, range, match }) {
             const tagName = match[1]?.trim();
             if (!tagName) return;
             const tag = allTagsRef.current.find(
@@ -73,8 +73,9 @@ function makeInlineTagExtension(allTagsRef: React.MutableRefObject<Tag[]>) {
             if (!tag) return;
             const markType = state.schema.marks[markName];
             if (!markType) return;
-            // Use TipTap's `tr` (passed as parameter) — NOT state.tr, which
-            // creates a separate transaction that TipTap never dispatches.
+            // state here is TipTap's chainable state wrapping the in-flight
+            // transaction — state.tr IS the transaction TipTap will dispatch.
+            const tr = state.tr;
             tr.replaceWith(range.from, range.to, state.schema.text(tag.name));
             tr.addMark(
               range.from,
@@ -839,7 +840,7 @@ export function DreamEditor() {
       variant="ghost"
       size="icon"
       className={cn('h-8 w-8', isActive && 'bg-accent')}
-      onClick={onClick}
+      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
     >
       {children}
     </Button>

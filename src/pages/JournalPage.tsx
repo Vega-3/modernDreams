@@ -1,6 +1,7 @@
 import { DreamList } from '@/components/dreams/DreamList';
 import { HandwritingUpload } from '@/components/handwriting/HandwritingUpload';
 import { HandwritingPreview } from '@/components/handwriting/HandwritingPreview';
+import { VoiceRecordDialog } from '@/components/voice/VoiceRecordDialog';
 import { useUIStore } from '@/stores/uiStore';
 import { useDreamStore } from '@/stores/dreamStore';
 
@@ -15,6 +16,8 @@ export function JournalPage() {
     recognizedDreams,
     setRecognizedDreams,
     openHandwritingPreview,
+    voiceRecordOpen,
+    closeVoiceRecord,
   } = useUIStore();
 
   const { fetchDreams } = useDreamStore();
@@ -39,10 +42,13 @@ export function JournalPage() {
   };
 
   return (
-    /* Negative margin bleeds the background flush to the edges of <main>;
-       inner padding restores the normal content offset. */
-    <div className="journal-rings-bg -m-6 p-6" style={{ minHeight: 'calc(100vh - 3.5rem)' }}>
+    <>
       <DreamList />
+      <VoiceRecordDialog
+        open={voiceRecordOpen}
+        onClose={closeVoiceRecord}
+        onDreamSaved={fetchDreams}
+      />
       <HandwritingUpload
         open={handwritingUploadOpen}
         onClose={closeHandwritingUpload}
@@ -53,6 +59,6 @@ export function JournalPage() {
         onClose={handlePreviewClose}
         recognizedDreams={recognizedDreams}
       />
-    </div>
+    </>
   );
 }

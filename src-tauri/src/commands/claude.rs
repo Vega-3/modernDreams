@@ -7,6 +7,7 @@
 use dreams_core::claude as core;
 use dreams_core::claude::{DreamAnalysisResult, InlineTagResult, TranscriptionResult};
 
+
 use super::to_ipc_err;
 
 #[tauri::command]
@@ -21,6 +22,17 @@ pub async fn transcribe_handwriting_claude(
     api_key: String,
 ) -> Result<TranscriptionResult, String> {
     core::transcribe_handwriting(&image_base64, &image_media_type, &api_key)
+        .await
+        .map_err(to_ipc_err)
+}
+
+#[tauri::command]
+pub async fn transcribe_voice_claude(
+    audio_base64: String,
+    audio_media_type: String,
+    api_key: String,
+) -> Result<TranscriptionResult, String> {
+    core::transcribe_voice(&audio_base64, &audio_media_type, &api_key)
         .await
         .map_err(to_ipc_err)
 }

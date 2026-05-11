@@ -26,6 +26,7 @@ interface UIState {
   handwritingUploadOpen: boolean;
   handwritingPreviewOpen: boolean;
   recognizedDreams: RecognizedDream[];
+  voiceRecordOpen: boolean;
 
   // Bulk-import queue (professional mode)
   importQueue: ImportQueueItem[];
@@ -40,6 +41,8 @@ interface UIState {
   closeEditor: () => void;
   openHandwritingUpload: () => void;
   closeHandwritingUpload: () => void;
+  openVoiceRecord: () => void;
+  closeVoiceRecord: () => void;
   setRecognizedDreams: (dreams: RecognizedDream[]) => void;
   openHandwritingPreview: () => void;
   closeHandwritingPreview: () => void;
@@ -59,6 +62,7 @@ export const useUIStore = create<UIState>((set) => ({
   handwritingUploadOpen: false,
   handwritingPreviewOpen: false,
   recognizedDreams: [],
+  voiceRecordOpen: false,
   importQueue: [],
   importQueueIndex: 0,
 
@@ -74,6 +78,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   openHandwritingUpload: () => set({ handwritingUploadOpen: true }),
   closeHandwritingUpload: () => set({ handwritingUploadOpen: false }),
+
+  openVoiceRecord: () => set({ voiceRecordOpen: true }),
+  closeVoiceRecord: () => set({ voiceRecordOpen: false }),
 
   setRecognizedDreams: (dreams) => set({ recognizedDreams: dreams }),
 

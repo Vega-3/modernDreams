@@ -11,6 +11,7 @@ pub mod dreams;
 pub mod graph;
 pub mod ocr;
 pub mod search;
+pub mod system;
 pub mod tags;
 pub mod theme;
 

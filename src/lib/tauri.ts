@@ -139,6 +139,17 @@ export const transcribeHandwritingClaude = (
     apiKey,
   });
 
+export const transcribeVoiceClaude = (
+  audioBase64: string,
+  audioMediaType: string,
+  apiKey: string,
+) =>
+  invoke<TranscriptionResult>('transcribe_voice_claude', {
+    audioBase64,
+    audioMediaType,
+    apiKey,
+  });
+
 // Claude AI dream analysis
 export interface DreamAnalysisResult {
   suggested_tag_names: string[];
@@ -155,6 +166,9 @@ export const analyzeDream = (
     availableTags,
     apiKey,
   });
+
+export const openMicrophoneSettings = () =>
+  invoke<void>('open_microphone_settings');
 
 // ── AI inline tag detection ────────────────────────────────────────────────────
 
@@ -257,6 +271,17 @@ export interface GraphStatsResult {
 
 export const getGraphStats = (startDate: string, endDate: string) =>
   invoke<GraphStatsResult>('get_graph_stats', { startDate, endDate });
+
+/** Tag pair that co-occurs in at least one shared paragraph, with count = number of
+ *  paragraph-instances where both tags appear together (across all dreams in the window). */
+export interface ParagraphCoOccurrence {
+  a: string;
+  b: string;
+  count: number;
+}
+
+export const getParagraphCoOccurrences = (startDate: string, endDate: string) =>
+  invoke<ParagraphCoOccurrence[]>('get_paragraph_co_occurrences', { startDate, endDate });
 
 // Theme Analysis commands
 export const getTagNotes = (tagId: string) =>

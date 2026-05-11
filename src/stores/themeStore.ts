@@ -127,21 +127,21 @@ export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
   bauhaus: {
     id: 'bauhaus',
     label: 'Bauhaus',
-    description: 'De Stijl geometry — Mondrian primary colours, flat planes, Josefin Sans, zero ornament.',
+    description: 'De Stijl geometry — Mondrian primaries, Bebas Neue bold display, flat planes, zero ornament. Light mode.',
     defaultFont: 'themeDefault',
     backgroundImageCss: '',
     iconStrokeWidth: 2,
     baseFontSize: '1rem',
-    primaryFontLabel: 'Josefin Sans (geometric)',
+    primaryFontLabel: 'Bebas Neue (Bauhaus bold)',
     secondaryFontLabel: 'Josefin Sans (geometric)',
     tagPalette: {
-      location: '#2d4ea3',
-      person:   '#e63329',
-      symbolic: '#c4901a',
-      emotive:  '#1e88e5',
-      custom:   '#9e9e9e',
+      location: '#1A5CB5',
+      person:   '#E3120B',
+      symbolic: '#D4940A',
+      emotive:  '#E87722',
+      custom:   '#0A6640',
     },
-    previewSwatches: ['#e63329', '#2d4ea3', '#f5c518', '#141414'],
+    previewSwatches: ['#E3120B', '#1A5CB5', '#FAD000', '#F0EEE6'],
   },
 
   greco: {
@@ -185,7 +185,7 @@ const CSS_KEY   = 'appearance_custom_css';
 const BG_KEY    = 'appearance_background_url';
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  activeTheme:        (localStorage.getItem(THEME_KEY) as ThemeId   | null) ?? 'mementos',
+  activeTheme:        (localStorage.getItem(THEME_KEY) as ThemeId   | null) ?? 'greco',
   fontFamily:         (localStorage.getItem(FONT_KEY)  as FontFamily | null) ?? 'themeDefault',
   customCss:          localStorage.getItem(CSS_KEY) ?? '',
   backgroundImageUrl: localStorage.getItem(BG_KEY)  ?? '',

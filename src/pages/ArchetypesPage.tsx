@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { useArchetypeStore, type Archetype } from '@/stores/archetypeStore';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
-import type { Tag } from '@/lib/tauri';
 
 // ── Archetype card ────────────────────────────────────────────────────────────
 
@@ -54,7 +53,7 @@ function ArchetypeCard({ archetype }: { archetype: Archetype }) {
           <div className="flex items-center gap-2.5">
             <span
               className="w-4 h-4 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card"
-              style={{ backgroundColor: archetype.color, ringColor: archetype.color }}
+              style={{ backgroundColor: archetype.color }}
             />
             <CardTitle className="text-sm font-semibold leading-tight">
               {archetype.name}

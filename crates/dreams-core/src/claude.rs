@@ -3,6 +3,7 @@
 //! Three async entry points used by the UI:
 //! - [`verify_api_key`] — cheapest possible ping to validate credentials.
 //! - [`transcribe_handwriting`] — two-stage vision → translation pipeline.
+//! - [`transcribe_voice`] — two-stage audio → dream-journal pipeline.
 //! - [`analyze_dream`] — returns tag suggestions + Jungian theme notes.
 //! - [`ai_tag_dream`] — returns inline `(phrase, tag_name)` annotations.
 //!
@@ -40,11 +41,20 @@ struct Message<'a> {
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ContentBlock<'a> {
     Image { source: ImageSource<'a> },
+    Audio { source: AudioSource<'a> },
     Text { text: &'a str },
 }
 
 #[derive(Serialize)]
 struct ImageSource<'a> {
+    #[serde(rename = "type")]
+    source_type: &'a str,
+    media_type: &'a str,
+    data: &'a str,
+}
+
+#[derive(Serialize)]
+struct AudioSource<'a> {
     #[serde(rename = "type")]
     source_type: &'a str,
     media_type: &'a str,
@@ -171,6 +181,84 @@ pub async fn transcribe_handwriting(
             role: "user",
             content: vec![ContentBlock::Text {
                 text: &translate_prompt,
+            }],
+        }],
+    };
+
+    let english_transcript = call_claude(&client, api_key.trim(), &stage2_request).await?;
+
+    Ok(TranscriptionResult {
+        raw_transcript,
+        english_transcript,
+    })
+}
+
+// --- Voice transcription (two-stage pipeline) ---
+
+/// Two sequential API calls:
+/// 1. Audio call – Claude listens to the recording and produces a raw transcript.
+/// 2. Text-only call – Claude refines the raw transcript into a coherent dream
+///    journal entry (removing filler words, fixing grammar, improving narrative
+///    flow while preserving every detail the dreamer mentioned).
+pub async fn transcribe_voice(
+    audio_base64: &str,
+    audio_media_type: &str,
+    api_key: &str,
+) -> CoreResult<TranscriptionResult> {
+    if api_key.trim().is_empty() {
+        return Err(CoreError::msg(
+            "No Anthropic API key configured. Please add your key in Settings.",
+        ));
+    }
+
+    let client = reqwest::Client::new();
+    // claude-3-5-sonnet is used here because audio input requires at least
+    // Sonnet-tier multimodal capability; Haiku does not accept audio content blocks.
+    let model = "claude-sonnet-4-5";
+
+    let transcribe_prompt = "Please transcribe this audio recording exactly as spoken. \
+        Preserve all details, names, places, and events mentioned. \
+        Remove filler words like 'um', 'uh', 'like', and false starts. \
+        Output only the transcribed text with no commentary.";
+
+    let stage1_request = AnthropicRequest {
+        model,
+        max_tokens: 2048,
+        messages: vec![Message {
+            role: "user",
+            content: vec![
+                ContentBlock::Audio {
+                    source: AudioSource {
+                        source_type: "base64",
+                        media_type: audio_media_type,
+                        data: audio_base64,
+                    },
+                },
+                ContentBlock::Text {
+                    text: transcribe_prompt,
+                },
+            ],
+        }],
+    };
+
+    let raw_transcript = call_claude(&client, api_key.trim(), &stage1_request).await?;
+
+    let refine_prompt = format!(
+        "You are given a raw transcript of someone verbally describing a dream they had. \
+        Rewrite it as a clear, first-person dream journal entry. \
+        Fix grammar, improve narrative flow, and organise the sequence of events — \
+        but preserve every detail, image, character, and emotion the dreamer mentioned. \
+        Do not interpret or analyse; only transcribe faithfully in journal style. \
+        Output only the refined text with no commentary.\n\nRaw transcript:\n{raw_transcript}"
+    );
+
+    let stage2_request = AnthropicRequest {
+        model,
+        max_tokens: 2048,
+        messages: vec![Message {
+            role: "user",
+            content: vec![ContentBlock::Text {
+                text: &refine_prompt,
             }],
         }],
     };
