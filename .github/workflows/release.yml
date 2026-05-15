@@ -88,8 +88,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: 'Ipsacarta ${{ github.event.inputs.tag || github.ref_name }}'
+          tagName: app-v__VERSION__
+          releaseName: 'Ipsacarta v__VERSION__'
           releaseBody: |
             See [RELEASES.md](https://github.com/${{ github.repository }}/blob/main/RELEASES.md) for full changelog.
 
