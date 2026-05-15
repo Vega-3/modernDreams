@@ -14,6 +14,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ── Step 1: create the GitHub Release draft once ───────────────────────────
   create-release:
@@ -36,12 +39,21 @@ jobs:
           script: |
             const tag = context.payload.inputs?.tag || context.ref.replace('refs/tags/', '');
             const version = '${{ steps.version.outputs.version }}';
-            const { data } = await github.rest.releases.create({
+            const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
               name: `Ipsacarta v${version}`,
-              body: `See [RELEASES.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/RELEASES.md) for full changelog.\n\n**Downloads**\n| Platform | File |\n|----------|------|\n| Linux (Ubuntu/Debian) | \`.deb\`, \`.AppImage\` |\n| Windows | \`.msi\`, \`.exe\` |\n| macOS | \`.dmg\` (universal — Intel + Apple Silicon) |`,
+              body: [
+                'See [RELEASES.md](https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/blob/main/RELEASES.md) for full changelog.',
+                '',
+                '**Downloads**',
+                '| Platform | File |',
+                '|----------|------|',
+                '| Linux (Ubuntu/Debian) | `.deb`, `.AppImage` |',
+                '| Windows | `.msi`, `.exe` |',
+                '| macOS | `.dmg` (universal — Intel + Apple Silicon) |',
+              ].join('\n'),
               draft: true,
               prerelease: false,
             });
