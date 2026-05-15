@@ -107,6 +107,15 @@ pub fn dispatch(ctx: &DreamsContext, method: &str, args: &Value) -> R {
             let end_date = pick_str(args, "endDate")?;
             core_graph::build_graph_input_json(&ctx.backend, start_date, end_date)
         }
+        "get_paragraph_co_occurrences" => {
+            let start_date = pick_str(args, "startDate")?;
+            let end_date = pick_str(args, "endDate")?;
+            to_value(core_graph::get_paragraph_co_occurrences(
+                &ctx.backend,
+                start_date,
+                end_date,
+            )?)
+        }
         #[cfg(feature = "python-analysis")]
         "get_graph_stats" => {
             let start_date = pick_str(args, "startDate")?;
@@ -132,6 +141,17 @@ pub fn dispatch(ctx: &DreamsContext, method: &str, args: &Value) -> R {
             let result = ctx.runtime.block_on(core_claude::transcribe_handwriting(
                 &image_base64,
                 &image_media_type,
+                &api_key,
+            ))?;
+            to_value(result)
+        }
+        "transcribe_voice" => {
+            let audio_base64 = pick_str(args, "audioBase64")?.to_owned();
+            let audio_media_type = pick_str(args, "audioMediaType")?.to_owned();
+            let api_key = pick_str(args, "apiKey")?.to_owned();
+            let result = ctx.runtime.block_on(core_claude::transcribe_voice(
+                &audio_base64,
+                &audio_media_type,
                 &api_key,
             ))?;
             to_value(result)

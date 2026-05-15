@@ -1,4 +1,6 @@
+#[cfg(target_os = "windows")]
 use base64::engine::general_purpose::STANDARD as B64;
+#[cfg(target_os = "windows")]
 use base64::Engine;
 
 /// Recognise handwritten text in a base64-encoded image.

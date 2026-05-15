@@ -212,9 +212,8 @@ pub async fn transcribe_voice(
     }
 
     let client = reqwest::Client::new();
-    // claude-3-5-sonnet is used here because audio input requires at least
-    // Sonnet-tier multimodal capability; Haiku does not accept audio content blocks.
-    let model = "claude-sonnet-4-5";
+    // Sonnet-tier is required for audio input; Haiku does not accept audio content blocks.
+    let model = "claude-sonnet-4-6";
 
     let transcribe_prompt = "Please transcribe this audio recording exactly as spoken. \
         Preserve all details, names, places, and events mentioned. \

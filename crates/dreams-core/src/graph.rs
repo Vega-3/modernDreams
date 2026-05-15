@@ -78,6 +78,15 @@ pub struct GraphStatsResult {
     pub top_triangles: Vec<GraphTriangle>,
 }
 
+/// Paragraph-level co-occurrence for one tag pair, returned by
+/// `get_paragraph_co_occurrences`. `a < b` lexicographically.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ParagraphCoOccurrence {
+    pub a:     String,
+    pub b:     String,
+    pub count: u64,
+}
+
 // --- Public entry points ---
 
 /// Build the JSON input for the graph analyser without running it. Useful
@@ -89,6 +98,48 @@ pub fn build_graph_input_json(
     end_date: &str,
 ) -> CoreResult<serde_json::Value> {
     backend.with_conn(|conn| build_graph_input(conn, start_date, end_date))
+}
+
+/// Return paragraph-level co-occurrence pairs for dreams in the given date window.
+/// Two tags co-occur when they both appear in the same paragraph of the same dream,
+/// as recorded in word_tag_associations. Dream-level co-occurrence is excluded.
+pub fn get_paragraph_co_occurrences(
+    backend: &Backend,
+    start_date: &str,
+    end_date: &str,
+) -> CoreResult<Vec<ParagraphCoOccurrence>> {
+    backend.with_conn(|conn| paragraph_co_occurrences(conn, start_date, end_date))
+}
+
+fn paragraph_co_occurrences(
+    conn: &Connection,
+    start_date: &str,
+    end_date: &str,
+) -> CoreResult<Vec<ParagraphCoOccurrence>> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT w1.tag_id, w2.tag_id, COUNT(*) AS cnt
+        FROM word_tag_associations w1
+        JOIN word_tag_associations w2
+          ON w1.dream_id       = w2.dream_id
+         AND w1.paragraph_index = w2.paragraph_index
+         AND w1.tag_id          < w2.tag_id
+        JOIN dreams d ON w1.dream_id = d.id
+        WHERE d.dream_date >= ?1 AND d.dream_date <= ?2
+        GROUP BY w1.tag_id, w2.tag_id
+        "#,
+    )?;
+    let pairs = stmt
+        .query_map(params![start_date, end_date], |row| {
+            Ok(ParagraphCoOccurrence {
+                a:     row.get(0)?,
+                b:     row.get(1)?,
+                count: row.get::<_, i64>(2)? as u64,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(pairs)
 }
 
 /// Build the graph input and run the Python analyser. Only available when
@@ -206,8 +257,9 @@ fn build_graph_input(
         }
     }
 
-    // 3b. Vertex contraction: for every pair of tags that co-appear in a dream,
-    //     increment their shared edge weight.
+    // 3b. Vertex contraction: link tags only when they share a paragraph highlight.
+    //     Dream-level co-occurrence is excluded — tags describing different scenes
+    //     of the same dream should not imply a thematic connection.
     let mut co_occurrence: HashMap<(String, String), u64> = HashMap::new();
     let mut tag_dream_counts: HashMap<String, u64> = HashMap::new();
 
@@ -216,18 +268,7 @@ fn build_graph_input(
             *tag_dream_counts.entry(tag_id.clone()).or_insert(0) += 1;
         }
 
-        // Base co-occurrence weight (1 per shared dream).
-        for i in 0..tag_ids.len() {
-            for j in (i + 1)..tag_ids.len() {
-                let a = std::cmp::min(tag_ids[i].as_str(), tag_ids[j].as_str());
-                let b = std::cmp::max(tag_ids[i].as_str(), tag_ids[j].as_str());
-                *co_occurrence
-                    .entry((a.to_string(), b.to_string()))
-                    .or_insert(0) += 1;
-            }
-        }
-
-        // Paragraph bonus: +1 for each paragraph where both tags are highlighted.
+        // Paragraph co-occurrence: +1 for each paragraph where both tags appear together.
         if let Some(para_map) = para_tag_map.get(dream_id) {
             let dream_tag_set: HashSet<&str> = tag_ids.iter().map(|s| s.as_str()).collect();
             for tag_ids_in_para in para_map.values() {
