@@ -14,17 +14,24 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   # ── Step 1: create the GitHub Release draft once ───────────────────────────
   create-release:
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create.outputs.result }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Read app version
         id: version
@@ -37,8 +44,18 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const tag = context.payload.inputs?.tag || context.ref.replace('refs/tags/', '');
+            const tag = '${{ steps.tag.outputs.tag }}';
             const version = '${{ steps.version.outputs.version }}';
+            // Delete any existing release for this tag so re-runs don't fail
+            try {
+              const existing = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner, repo: context.repo.repo, tag,
+              });
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner, repo: context.repo.repo,
+                release_id: existing.data.id,
+              });
+            } catch (_) {}
             const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -69,17 +86,20 @@ jobs:
           - platform: linux
             os: ubuntu-22.04
             rust-targets: x86_64-unknown-linux-gnu
-            tauri-args: ''
+            args: ''
+            bundle-dir: target/release/bundle
 
           - platform: windows
             os: windows-latest
             rust-targets: x86_64-pc-windows-msvc
-            tauri-args: ''
+            args: ''
+            bundle-dir: target/release/bundle
 
           - platform: macos
             os: macos-latest
             rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
-            tauri-args: '--target universal-apple-darwin'
+            args: --target universal-apple-darwin
+            bundle-dir: target/universal-apple-darwin/release/bundle
 
     runs-on: ${{ matrix.os }}
 
@@ -118,9 +138,33 @@ jobs:
         run: npm ci
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        run: npm run tauri build -- ${{ matrix.args }}
+
+      - name: Upload artifacts to release (Linux)
+        if: matrix.platform == 'linux'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: ${{ matrix.tauri-args }}
+        run: |
+          gh release upload ${{ needs.create-release.outputs.tag }} \
+            ${{ matrix.bundle-dir }}/deb/*.deb \
+            ${{ matrix.bundle-dir }}/appimage/*.AppImage \
+            --clobber
+
+      - name: Upload artifacts to release (Windows)
+        if: matrix.platform == 'windows'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.create-release.outputs.tag }} `
+            (Get-ChildItem ${{ matrix.bundle-dir }}/msi/*.msi).FullName `
+            (Get-ChildItem ${{ matrix.bundle-dir }}/nsis/*.exe).FullName `
+            --clobber
+
+      - name: Upload artifacts to release (macOS)
+        if: matrix.platform == 'macos'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.create-release.outputs.tag }} \
+            ${{ matrix.bundle-dir }}/dmg/*.dmg \
+            --clobber
