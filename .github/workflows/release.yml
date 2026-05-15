@@ -1,10 +1,17 @@
 name: Release
 
 # Triggered by version tags pushed by scripts/release.sh (e.g. v0.2.0)
+# Also supports manual dispatch from the GitHub Actions UI.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.2.0)'
+        required: true
+        default: 'v0.2.0'
 
 jobs:
   build:
@@ -77,8 +84,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Dreams ${{ github.ref_name }}
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: Dreams ${{ github.event.inputs.tag || github.ref_name }}
           releaseBody: |
             See [RELEASES.md](https://github.com/${{ github.repository }}/blob/main/RELEASES.md) for full changelog.
 
