@@ -13,6 +13,10 @@ on:
         required: true
         default: 'v0.2.0'
 
+# Required for tauri-action to create and upload GitHub Releases
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build — ${{ matrix.platform }}
@@ -85,7 +89,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: Dreams ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: 'Ipsacarta ${{ github.event.inputs.tag || github.ref_name }}'
           releaseBody: |
             See [RELEASES.md](https://github.com/${{ github.repository }}/blob/main/RELEASES.md) for full changelog.
 
@@ -94,7 +98,7 @@ jobs:
             |----------|------|
             | Linux (Ubuntu/Debian) | `.deb`, `.AppImage` |
             | Windows | `.msi`, `.exe` |
-            | macOS | `.dmg` |
+            | macOS | `.dmg` (universal — Intel + Apple Silicon) |
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: false
           args: ${{ matrix.tauri-args }}
