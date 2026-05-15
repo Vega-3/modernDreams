@@ -13,8 +13,11 @@ export interface ImportQueueItem {
   contentHtml: string;
   contentPlain: string;
   date: string;
-  clientId: string;
-  clientName: string;
+  /** Optional — only set in Professional mode imports. */
+  clientId?: string;
+  clientName?: string;
+  /** Tag IDs auto-matched from file content at parse time. */
+  tagIds?: string[];
 }
 
 interface UIState {
@@ -27,6 +30,7 @@ interface UIState {
   handwritingPreviewOpen: boolean;
   recognizedDreams: RecognizedDream[];
   voiceRecordOpen: boolean;
+  bulkImportOpen: boolean;
 
   // Bulk-import queue (professional mode)
   importQueue: ImportQueueItem[];
@@ -43,6 +47,8 @@ interface UIState {
   closeHandwritingUpload: () => void;
   openVoiceRecord: () => void;
   closeVoiceRecord: () => void;
+  openBulkImport: () => void;
+  closeBulkImport: () => void;
   setRecognizedDreams: (dreams: RecognizedDream[]) => void;
   openHandwritingPreview: () => void;
   closeHandwritingPreview: () => void;
@@ -63,6 +69,7 @@ export const useUIStore = create<UIState>((set) => ({
   handwritingPreviewOpen: false,
   recognizedDreams: [],
   voiceRecordOpen: false,
+  bulkImportOpen: false,
   importQueue: [],
   importQueueIndex: 0,
 
@@ -81,6 +88,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   openVoiceRecord: () => set({ voiceRecordOpen: true }),
   closeVoiceRecord: () => set({ voiceRecordOpen: false }),
+
+  openBulkImport: () => set({ bulkImportOpen: true }),
+  closeBulkImport: () => set({ bulkImportOpen: false }),
 
   setRecognizedDreams: (dreams) => set({ recognizedDreams: dreams }),
 

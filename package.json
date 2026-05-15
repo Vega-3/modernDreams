@@ -45,6 +45,8 @@
     "date-fns": "^3.3.1",
     "framer-motion": "^11.0.3",
     "lucide-react": "^0.321.0",
+    "mammoth": "^1.12.0",
+    "pdfjs-dist": "^5.7.284",
     "react": "^18.2.0",
     "react-day-picker": "^8.10.0",
     "react-dom": "^18.2.0",

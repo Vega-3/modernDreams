@@ -2,6 +2,7 @@ import { DreamList } from '@/components/dreams/DreamList';
 import { HandwritingUpload } from '@/components/handwriting/HandwritingUpload';
 import { HandwritingPreview } from '@/components/handwriting/HandwritingPreview';
 import { VoiceRecordDialog } from '@/components/voice/VoiceRecordDialog';
+import { BulkImportDialog } from '@/components/import/BulkImportDialog';
 import { useUIStore } from '@/stores/uiStore';
 import { useDreamStore } from '@/stores/dreamStore';
 
@@ -18,6 +19,8 @@ export function JournalPage() {
     openHandwritingPreview,
     voiceRecordOpen,
     closeVoiceRecord,
+    bulkImportOpen,
+    closeBulkImport,
   } = useUIStore();
 
   const { fetchDreams } = useDreamStore();
@@ -44,6 +47,7 @@ export function JournalPage() {
   return (
     <>
       <DreamList />
+      <BulkImportDialog open={bulkImportOpen} onClose={closeBulkImport} />
       <VoiceRecordDialog
         open={voiceRecordOpen}
         onClose={closeVoiceRecord}

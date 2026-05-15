@@ -291,9 +291,13 @@ export function DreamEditor() {
       if (currentQueueItem) {
         setTitle(currentQueueItem.title);
         setDreamDate(currentQueueItem.date);
-        setSelectedClientId(currentQueueItem.clientId);
-        setWakingLifeContext(clientPrefix(currentQueueItem.clientName));
+        if (currentQueueItem.clientId)   setSelectedClientId(currentQueueItem.clientId);
+        if (currentQueueItem.clientName) setWakingLifeContext(clientPrefix(currentQueueItem.clientName));
         editor.commands.setContent(currentQueueItem.contentHtml);
+        // Pre-select tags that were auto-matched from the file content
+        if (currentQueueItem.tagIds?.length) {
+          setSelectedTags(allTags.filter(t => currentQueueItem.tagIds!.includes(t.id)));
+        }
         draftRestoredRef.current = true;
       } else {
         setTitle('');
