@@ -5,8 +5,9 @@ import { updateTag } from '@/lib/tauri';
 
 // ── Theme CSS definitions ─────────────────────────────────────────────────────
 
-// "Mementos" is the Persona 5 maximalist theme (default, defined in globals.css).
-// Selecting it removes any variable overrides so globals.css takes full effect.
+// "Greco-Roman" is the default theme (set in themeStore.ts).
+// "Mementos" is the Persona 5 maximalist theme — selecting it removes any variable
+// overrides so globals.css takes full effect.
 
 // "Base" — minimal indigo dark theme.  Overrides all Persona 5 design tokens.
 // Includes body font-family so the theme is fully self-contained regardless of
@@ -62,18 +63,24 @@ body {
 svg[class*="lucide"] { stroke-width: 1.75; }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
+/* Full indigo border box — rounded to match the soft minimal aesthetic */
 .dream-card {
-  border-radius: var(--radius);
-  border: 1px solid hsl(var(--border));
-  border-left: none;
-  clip-path: none;
+  border-radius: 0.75rem !important;
+  border: 2px solid hsl(239 84% 67% / 0.45) !important;
+  border-left-width: 2px !important;
+  border-left-color: hsl(239 84% 67% / 0.45) !important;
+  clip-path: none !important;
   box-shadow: none;
 }
 .dream-card:hover {
-  border-left-color: unset;
+  border-color: hsl(239 84% 67% / 0.9) !important;
+  border-left-color: hsl(239 84% 67% / 0.9) !important;
   background: hsl(var(--accent));
-  box-shadow: 0 2px 12px hsl(var(--primary) / 0.08);
+  box-shadow: 0 0 0 1px hsl(239 84% 67% / 0.15), 0 4px 16px hsl(239 84% 67% / 0.1);
 }
+
+/* ── Logo ────────────────────────────────────────────────────────────────── */
+.logo-mark { color: hsl(239 84% 67%); }
 
 /* ── Navigation ──────────────────────────────────────────────────────────── */
 .nav-item-active {
@@ -166,18 +173,22 @@ body {
 .tiptap h3 { font-size: 1.2rem; font-weight: 600; }
 .journal-rings-bg { background: hsl(0 0% 97%); }
 svg[class*="lucide"] { stroke-width: 2; }
+/* Full black border box — slightly rounded, high contrast for readability */
 .dream-card {
-  border-radius: var(--radius);
-  border: 2px solid hsl(var(--border));
-  border-left: none;
-  clip-path: none;
+  border-radius: 0.5rem !important;
+  border: 2px solid hsl(0 0% 5%) !important;
+  border-left-width: 2px !important;
+  border-left-color: hsl(0 0% 5%) !important;
+  clip-path: none !important;
   box-shadow: none;
 }
 .dream-card:hover {
-  border-color: hsl(var(--foreground) / 0.4);
+  border-color: hsl(0 0% 0%) !important;
+  border-left-color: hsl(0 0% 0%) !important;
   background: hsl(var(--accent));
-  box-shadow: 0 2px 8px hsl(0 0% 0% / 0.08);
+  box-shadow: 0 2px 12px hsl(0 0% 0% / 0.14);
 }
+.logo-mark { color: hsl(0 0% 5%); }
 .nav-item-active {
   border-left: none !important;
   border-radius: calc(var(--radius) - 2px);
@@ -255,18 +266,23 @@ body {
     hsl(240 15% 3%);
 }
 svg[class*="lucide"] { stroke-width: 1.5; }
+/* Full cyan border box — near-sharp corners for the terminal aesthetic */
 .dream-card {
-  border-radius: var(--radius);
-  border: 1px solid hsl(180 50% 18%);
-  border-left: 3px solid hsl(180 100% 50% / 0.6);
-  clip-path: none;
+  border-radius: 0.125rem !important;
+  border: 1.5px solid hsl(180 100% 50% / 0.55) !important;
+  border-left-width: 1.5px !important;
+  border-left-color: hsl(180 100% 50% / 0.55) !important;
+  clip-path: none !important;
   box-shadow: none;
 }
 .dream-card:hover {
-  border-left-color: hsl(180 100% 50%);
+  border-color: hsl(180 100% 50%) !important;
+  border-left-color: hsl(180 100% 50%) !important;
   background: hsl(240 15% 9%);
-  box-shadow: 0 0 16px hsl(180 100% 50% / 0.08);
+  box-shadow: 0 0 18px hsl(180 100% 50% / 0.18),
+              0 0 0 1px hsl(180 100% 50% / 0.08);
 }
+.logo-mark { color: hsl(180 100% 50%); }
 .nav-item-active {
   border-left: 2px solid hsl(180 100% 50%) !important;
   border-radius: 0 !important;
@@ -303,39 +319,40 @@ header::after { display: none; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(180 100% 50% / 0.4); }
 `.trim();
 
-// "Bauhaus" — De Stijl geometry: Mondrian primaries, flat planes, Josefin Sans,
-// zero ornament.  Inspired by the Bauhaus / De Stijl movements: every line has
-// a structural purpose, colour blocks replace gradients, type is geometric and
-// all-caps where it labels UI regions.
+// "Bauhaus" — De Stijl geometry: Mondrian primaries, Bebas Neue bold display,
+// flat planes, zero ornament.  Light mode — warm linen canvas with opaque
+// primary-colour blocks and thick black ruled lines, faithful to
+// Mondrian's Composition No. II (1930).
 const BAUHAUS_THEME_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Josefin+Sans:wght@400;600;700&display=swap');
 
 :root {
-  /* Near-black with warm undertone — Mondrian's background */
-  --background: 0 0% 8%;
-  --foreground: 0 0% 95%;
-  --card: 0 0% 11%;
-  --card-foreground: 0 0% 95%;
-  --popover: 0 0% 14%;
-  --popover-foreground: 0 0% 95%;
-  /* Primary: Mondrian red #E63329 */
-  --primary: 3 79% 53%;
+  /* Light mode — warm off-white, like Mondrian's primed linen canvas */
+  --background: 45 30% 96%;
+  --foreground: 0 0% 6%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 6%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 6%;
+  /* Primary: punchy Mondrian red #E3120B */
+  --primary: 3 95% 45%;
   --primary-foreground: 0 0% 100%;
-  /* Secondary: Mondrian blue #2D4EA3 */
-  --secondary: 223 57% 41%;
+  /* Secondary: deep Mondrian blue #1C3E8A */
+  --secondary: 225 68% 32%;
   --secondary-foreground: 0 0% 100%;
-  --muted: 0 0% 16%;
-  --muted-foreground: 0 0% 58%;
-  --accent: 0 0% 18%;
-  --accent-foreground: 0 0% 95%;
-  --destructive: 0 84% 60%;
+  --muted: 0 0% 91%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 45 20% 92%;
+  --accent-foreground: 0 0% 6%;
+  --destructive: 0 84% 42%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 22%;
-  --input: 0 0% 16%;
-  --ring: 3 79% 53%;
+  /* Dark borders — the Mondrian grid line aesthetic */
+  --border: 0 0% 15%;
+  --input: 0 0% 94%;
+  --ring: 3 95% 45%;
   /* Zero radius — Bauhaus uses only rectilinear geometry */
   --radius: 0rem;
-  --accent-line: hsl(3 79% 53%);
+  --accent-line: hsl(3 95% 45%);
 }
 
 body {
@@ -345,144 +362,149 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* Josefin Sans uppercase geometry for all structural labels */
+/* Bebas Neue for all structural display — the bold geometric Bauhaus display face */
 h1, h2, h3 {
-  font-family: 'Josefin Sans', sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-family: 'Bebas Neue', 'Josefin Sans', sans-serif;
+  letter-spacing: 0.06em;
 }
 
 .tiptap h1 {
-  font-size: 1.75rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.1em;
+  font-size: 2.25rem; font-weight: 400;
+  font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.1em;
 }
-.tiptap h2 { font-size: 1.375rem; font-weight: 600; text-transform: uppercase; }
-.tiptap h3 { font-size: 1.125rem; font-weight: 600; text-transform: uppercase; }
+.tiptap h2 {
+  font-size: 1.625rem; font-weight: 400;
+  font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.08em;
+}
+.tiptap h3 {
+  font-size: 1.25rem; font-weight: 400;
+  font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.06em;
+}
 
-/* Mondrian "Composition No. II" grid — layered CSS gradients, same technique
-   as the Mementos concentric rings.  Semi-transparent colour blocks tint the
-   dark base; sharp-stop gradients cut the De Stijl black ruled lines. */
+/* Mondrian "Composition No. II" — opaque primary blocks on linen white.
+   Colour blocks are fully opaque (light mode); thick black rules divide the canvas. */
 .journal-rings-bg {
-  background-color: hsl(0 0% 8%);
+  background-color: hsl(45 30% 96%);
   background-image:
-    /* Red field — upper right, refs the dominant red mass in Composition No. II */
-    linear-gradient(hsl(3 79% 53% / 0.52), hsl(3 79% 53% / 0.52)),
-    /* Blue field — lower left */
-    linear-gradient(hsl(223 57% 41% / 0.50), hsl(223 57% 41% / 0.50)),
-    /* Yellow sliver — narrow strip at the far right below the horizontal rule */
-    linear-gradient(hsl(47 96% 52% / 0.48), hsl(47 96% 52% / 0.48)),
+    /* Red block — dominant upper-right mass */
+    linear-gradient(#E3120B, #E3120B),
+    /* Blue block — lower-left anchor */
+    linear-gradient(#1C3E8A, #1C3E8A),
+    /* Yellow sliver — narrow accent strip */
+    linear-gradient(#FAD000, #FAD000),
     /* Primary vertical rule (thick) at ~62% from left */
     linear-gradient(
       90deg,
       transparent           calc(62% - 5px),
-      #040404               calc(62% - 5px),
-      #040404               calc(62% + 5px),
+      #0A0A0A               calc(62% - 5px),
+      #0A0A0A               calc(62% + 5px),
       transparent           calc(62% + 5px)
     ),
-    /* Secondary vertical rule (thin) at ~34% */
+    /* Secondary vertical rule (thin) at ~33% */
     linear-gradient(
       90deg,
-      transparent           calc(34% - 3px),
-      #040404               calc(34% - 3px),
-      #040404               calc(34% + 3px),
-      transparent           calc(34% + 3px)
+      transparent           calc(33% - 2.5px),
+      #0A0A0A               calc(33% - 2.5px),
+      #0A0A0A               calc(33% + 2.5px),
+      transparent           calc(33% + 2.5px)
     ),
     /* Primary horizontal rule (thick) at ~57% from top */
     linear-gradient(
       transparent           calc(57% - 5px),
-      #040404               calc(57% - 5px),
-      #040404               calc(57% + 5px),
+      #0A0A0A               calc(57% - 5px),
+      #0A0A0A               calc(57% + 5px),
       transparent           calc(57% + 5px)
     ),
     /* Secondary horizontal rule (thin) at ~20% */
     linear-gradient(
-      transparent           calc(20% - 3px),
-      #040404               calc(20% - 3px),
-      #040404               calc(20% + 3px),
-      transparent           calc(20% + 3px)
+      transparent           calc(20% - 2.5px),
+      #0A0A0A               calc(20% - 2.5px),
+      #0A0A0A               calc(20% + 2.5px),
+      transparent           calc(20% + 2.5px)
     );
   background-size:
-    36% 59%,      /* red field:   36 wide × 59 tall */
-    30% 41%,      /* blue field:  30 wide × 41 tall */
-     7% 41%,      /* yellow sliver: 7 wide × 41 tall */
-    100% 100%, 100% 100%,   /* vertical rules: full viewport */
-    100% 100%, 100% 100%;   /* horizontal rules: full viewport */
+    36% 57%,    /* red:    upper-right mass */
+    30% 43%,    /* blue:   lower-left anchor */
+     7% 35%,    /* yellow: thin accent sliver */
+    100% 100%, 100% 100%,
+    100% 100%, 100% 100%;
   background-position:
-    64%   0%,     /* red:    anchored to top-right corner */
-     0% 100%,     /* blue:   anchored to bottom-left corner */
-    92%  59%,     /* yellow: right edge, below horizontal rule */
+    64%   0%,   /* red:    top-right corner */
+     0% 100%,   /* blue:   bottom-left corner */
+    92%  20%,   /* yellow: right side, upper area */
     0 0, 0 0, 0 0, 0 0;
   background-repeat: no-repeat;
 }
 
 svg[class*="lucide"] { stroke-width: 2; }
 
-/* Geometric card: thick red left bar, single neutral border — structural, not decorative */
+/* Bauhaus card: no outline — flat plane on flat canvas, zero ornament */
 .dream-card {
-  border-radius: 0;
-  border: 1px solid hsl(0 0% 22%);
-  border-left: 4px solid hsl(3 79% 53%);
-  clip-path: none;
+  border-radius: 0 !important;
+  border: none !important;
+  border-left-width: 0 !important;
+  border-left-color: transparent !important;
+  clip-path: none !important;
+  background: #ffffff;
   box-shadow: none;
 }
 .dream-card:hover {
-  /* Mondrian yellow on hover — colour signals state */
-  border-left-color: hsl(47 96% 52%);
-  background: hsl(0 0% 14%);
+  border-color: transparent !important;
+  border-left-color: transparent !important;
+  background: hsl(45 20% 96%);
   box-shadow: none;
 }
 
-/* Nav: red accent bar, no rounding */
+.logo-mark { color: hsl(3 95% 45%); }
+/* Nav: red accent bar, Bebas Neue, no rounding */
 .nav-item-active {
-  border-left: 3px solid hsl(3 79% 53%) !important;
+  border-left: 4px solid hsl(3 95% 45%) !important;
   border-radius: 0 !important;
-  background: hsl(3 79% 53% / 0.1) !important;
-  color: hsl(3 79% 53%) !important;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  background: hsl(3 95% 45% / 0.08) !important;
+  color: hsl(3 95% 45%) !important;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 0.95em;
+  letter-spacing: 0.1em;
 }
 
-/* Header: thick Mondrian red bottom line — structural separator */
-header { border-bottom: 3px solid hsl(3 79% 53%); }
+/* Header: thick red bottom rule — primary structural separator */
+header { border-bottom: 4px solid hsl(3 95% 45%); }
 header::after { display: none; }
 
 .section-title {
-  font-family: 'Josefin Sans', sans-serif;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: hsl(0 0% 58%);
+  color: hsl(0 0% 35%);
 }
 .section-title::before { display: none; }
 
-/* Tags: rectangular, uppercase, Josefin */
+/* Tags: rectangular, Josefin Sans uppercase */
 .tag-badge {
   border-radius: 0;
   font-family: 'Josefin Sans', sans-serif;
   font-size: 0.65rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 700;
 }
 
-/* Dialogs: no Persona 5 left-bar decoration */
 [role="dialog"] [data-radix-dialog-title]::before,
 [role="dialog"] .dialog-title::before { display: none; }
 
-/* Buttons: no Persona 5 top accent */
 button[data-variant="default"], .btn-primary { border-top: none; }
 
-/* ── Persona 5 font override — use Josefin Sans for brand/title text ──────── */
+/* Bebas Neue for all brand/display text */
 .font-p5 {
-  font-family: 'Josefin Sans', 'Futura', 'Century Gothic', sans-serif;
-  text-transform: uppercase;
+  font-family: 'Bebas Neue', 'Josefin Sans', sans-serif;
   letter-spacing: 0.12em;
 }
 
-::-webkit-scrollbar-thumb { background: hsl(0 0% 26%); }
-::-webkit-scrollbar-thumb:hover { background: hsl(3 79% 53%); }
+::-webkit-scrollbar-track { background: hsl(45 15% 92%); }
+::-webkit-scrollbar-thumb { background: hsl(0 0% 28%); }
+::-webkit-scrollbar-thumb:hover { background: hsl(3 95% 45%); }
 `.trim();
 
 // "Greco-Roman" — classical antiquity: Cinzel display capitals,
@@ -549,21 +571,25 @@ h1, h2, h3 {
 
 svg[class*="lucide"] { stroke-width: 1.5; }
 
-/* Classical card: thin gold left rule — like a manuscript ruling line */
+/* Classical double-rule left + fine gold top — manuscript ruled double-bar */
 .dream-card {
-  border-radius: 0;
-  border: 1px solid hsl(40 28% 20%);
-  border-left: 2px solid hsl(40 55% 50% / 0.55);
-  clip-path: none;
-  box-shadow: inset 0 0 0 1px hsl(40 55% 50% / 0.04);
+  border-radius: 0 !important;
+  border: 1px solid hsl(40 28% 20%) !important;
+  border-left-width: 3px !important;
+  border-left-color: hsl(40 55% 50% / 0.6) !important;
+  border-left-style: double !important;
+  border-top: 1px solid hsl(40 55% 50% / 0.3) !important;
+  clip-path: none !important;
+  box-shadow: none;
 }
 .dream-card:hover {
-  border-left-color: hsl(40 55% 50%);
+  border-left-color: hsl(40 55% 50%) !important;
+  border-top-color: hsl(40 55% 50% / 0.7) !important;
   background: hsl(36 20% 10%);
-  box-shadow: 0 2px 20px hsl(40 55% 50% / 0.07),
-              inset 0 0 0 1px hsl(40 55% 50% / 0.08);
+  box-shadow: 0 2px 20px hsl(40 55% 50% / 0.07);
 }
 
+.logo-mark { color: hsl(40 55% 50%); }
 /* Nav: gold left rule, Cinzel typography */
 .nav-item-active {
   border-left: 2px solid hsl(40 55% 50%) !important;

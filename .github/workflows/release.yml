@@ -1,0 +1,93 @@
+name: Release
+
+# Triggered by version tags pushed by scripts/release.sh (e.g. v0.2.0)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build — ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Linux / Ubuntu ─────────────────────────────────────────────
+          - platform: linux
+            os: ubuntu-22.04
+            rust-targets: x86_64-unknown-linux-gnu
+            tauri-args: ''
+
+          # ── Windows ────────────────────────────────────────────────────
+          - platform: windows
+            os: windows-latest
+            rust-targets: x86_64-pc-windows-msvc
+            tauri-args: ''
+
+          # ── macOS ──────────────────────────────────────────────────────
+          - platform: macos
+            os: macos-latest
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri-args: '--target universal-apple-darwin'
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Linux system deps ───────────────────────────────────────────────
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            build-essential
+
+      # ── Rust ────────────────────────────────────────────────────────────
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      # ── Node / npm ──────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # ── Tauri build ─────────────────────────────────────────────────────
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Dreams ${{ github.ref_name }}
+          releaseBody: |
+            See [RELEASES.md](https://github.com/${{ github.repository }}/blob/main/RELEASES.md) for full changelog.
+
+            **Downloads**
+            | Platform | File |
+            |----------|------|
+            | Linux (Ubuntu/Debian) | `.deb`, `.AppImage` |
+            | Windows | `.msi`, `.exe` |
+            | macOS | `.dmg` |
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: ${{ matrix.tauri-args }}

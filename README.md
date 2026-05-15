@@ -54,7 +54,7 @@ All builds are attached to each [GitHub Release](https://github.com/Vega-3/moder
 - Per-dream client attribution stored in the Waking Life Context field
 
 ### Appearance
-- Four themes: **Mementos** (default), **Base**, **Clarity** (accessibility), **Neon Noir**
+- Six themes: **Greco-Roman** (default), **Mementos**, **Base**, **Clarity** (accessibility), **Neon Noir**, **Bauhaus**
 - Font picker, custom CSS injection, custom background image, tag colour palette upload
 
 ---

@@ -171,3 +171,50 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 Check EXAMPLES.md for more details on common assumptions and better procedures. 
 
 ---
+
+## Platform Release Guide
+
+### Supported Platforms (priority order)
+1. **Linux / Ubuntu** — Primary development environment. Build target: `.deb` + `.AppImage`.
+2. **Windows** — Primary end-user target. Build target: `.msi` + NSIS `.exe`.
+3. **macOS** — Secondary end-user target. Build target: `.dmg`. Must build on a real macOS runner (no cross-compile).
+
+### Version Sources (keep in sync)
+| File | Field | Tool |
+|------|--------|------|
+| `Cargo.toml` | `[workspace.package] version` | sed / `cargo set-version` |
+| `src-tauri/tauri.conf.json` | `"version"` (top-level) | sed / jq |
+| `package.json` | `"version"` (top-level) | `npm version --no-git-tag-version` |
+
+All three must match. Use `scripts/release.sh` to bump them atomically.
+
+### Build Prerequisites Per Platform
+- **All platforms**: Rust stable toolchain, Node.js 20+, npm
+- **Linux / Ubuntu**: `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `build-essential`, `libssl-dev`
+- **Windows**: WebView2 Runtime, Microsoft C++ Build Tools (or Visual Studio)
+- **macOS**: Xcode Command Line Tools
+
+### Development Workflow for AI Agents
+1. Develop and verify on the current platform (usually Linux/Ubuntu in this repo).
+2. Run `npm run build` (TypeScript + Vite) to catch frontend errors.
+3. Run `npm run tauri build` to produce a local installer and confirm Rust compiles cleanly.
+4. Commit to `main`; GitHub Actions (`.github/workflows/release.yml`) handles multi-platform builds on tag push.
+5. To cut a release: `bash scripts/release.sh <version> "<changelog line>"`.
+
+### Cutting a Release (step by step)
+```
+bash scripts/release.sh 0.2.0 "Add handwriting import, fix bold/italic on Linux"
+```
+The script will:
+1. Bump the version in all three config files.
+2. `git commit` the bump, then `git tag v<version>`.
+3. Push the tag — this triggers the GitHub Actions release build.
+4. Call `~/Desktop/dreams-landing/deploy.sh <version> <changelog>` to update the Vercel landing page.
+
+After the GitHub Actions run completes, download the platform installers from the GitHub Release page and attach them as assets to the release if not auto-attached.
+
+### Platform-Specific Notes for AI Agents
+- **Windows OCR** (`src-tauri/src/ocr.rs`) is Windows-only; it is gated with `#[cfg(target_os = "windows")]` and must not be called on other platforms.
+- The `dreams-ffi` crate compiles as `cdylib`/`staticlib` and is intended for future mobile targets; do not break its C ABI.
+- Graphify (`graphify-out/`) is a dev-time knowledge graph tool, not shipped in the app bundle.
+- SQLite DB paths differ per OS — see README.md for locations.

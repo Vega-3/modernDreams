@@ -225,6 +225,11 @@ body {
   font-family: 'Persona5', sans-serif;
 }
 
+/* Logo mark — colour set here for Mementos; each other theme overrides via ThemeProvider */
+.logo-mark {
+  color: #de0615;
+}
+
 /* Dream cards: white border, thick red left accent, sharp angular corners */
 .dream-card {
   border-radius: 0 !important;
