@@ -1,7 +1,5 @@
 name: Release
 
-# Triggered by version tags pushed by scripts/release.sh (e.g. v0.2.0)
-# Also supports manual dispatch from the GitHub Actions UI.
 on:
   push:
     tags:
@@ -13,30 +11,59 @@ on:
         required: true
         default: 'v0.2.0'
 
-# Required for tauri-action to create and upload GitHub Releases
 permissions:
   contents: write
 
 jobs:
+  # ── Step 1: create the GitHub Release draft once ───────────────────────────
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create release draft
+        id: create
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.payload.inputs?.tag || context.ref.replace('refs/tags/', '');
+            const version = '${{ steps.version.outputs.version }}';
+            const { data } = await github.rest.releases.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Ipsacarta v${version}`,
+              body: `See [RELEASES.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/RELEASES.md) for full changelog.\n\n**Downloads**\n| Platform | File |\n|----------|------|\n| Linux (Ubuntu/Debian) | \`.deb\`, \`.AppImage\` |\n| Windows | \`.msi\`, \`.exe\` |\n| macOS | \`.dmg\` (universal — Intel + Apple Silicon) |`,
+              draft: true,
+              prerelease: false,
+            });
+            return data.id;
+
+  # ── Step 2: build on each platform and upload to the release ───────────────
   build:
-    name: Build — ${{ matrix.platform }}
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ── Linux / Ubuntu ─────────────────────────────────────────────
           - platform: linux
             os: ubuntu-22.04
             rust-targets: x86_64-unknown-linux-gnu
             tauri-args: ''
 
-          # ── Windows ────────────────────────────────────────────────────
           - platform: windows
             os: windows-latest
             rust-targets: x86_64-pc-windows-msvc
             tauri-args: ''
 
-          # ── macOS ──────────────────────────────────────────────────────
           - platform: macos
             os: macos-latest
             rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -45,10 +72,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ── Linux system deps ───────────────────────────────────────────────
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         run: |
@@ -61,7 +86,6 @@ jobs:
             libssl-dev \
             build-essential
 
-      # ── Rust ────────────────────────────────────────────────────────────
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -72,7 +96,6 @@ jobs:
         with:
           workspaces: ". -> target"
 
-      # ── Node / npm ──────────────────────────────────────────────────────
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -82,23 +105,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # ── Tauri build ─────────────────────────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: 'Ipsacarta v__VERSION__'
-          releaseBody: |
-            See [RELEASES.md](https://github.com/${{ github.repository }}/blob/main/RELEASES.md) for full changelog.
-
-            **Downloads**
-            | Platform | File |
-            |----------|------|
-            | Linux (Ubuntu/Debian) | `.deb`, `.AppImage` |
-            | Windows | `.msi`, `.exe` |
-            | macOS | `.dmg` (universal — Intel + Apple Silicon) |
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.tauri-args }}
