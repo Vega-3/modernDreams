@@ -7,14 +7,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { applyTagToDreams } from '@/lib/tagUtils';
-import type { Tag, Dream } from '@/lib/tauri';
+import { applyTagToDreams, type DreamMatch } from '@/lib/tagUtils';
+import type { Tag } from '@/lib/tauri';
 
 interface TagApplyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tag: Tag | null;
-  matchingDreams: Dream[];
+  matchingDreams: DreamMatch[];
   /** Called after a successful apply so the parent can refresh dream state. */
   onApplied: () => Promise<void>;
   /** Heading variant: 'new' for freshly created tags, 'updated' for edits. */
@@ -35,7 +35,7 @@ export function TagApplyDialog({
   // Re-initialise selection (all selected) whenever the dialog opens
   useEffect(() => {
     if (open) {
-      setSelectedIds(new Set(matchingDreams.map((d) => d.id)));
+      setSelectedIds(new Set(matchingDreams.map((m) => m.dream.id)));
       setIsApplying(false);
     }
   }, [open, matchingDreams]);
@@ -43,8 +43,7 @@ export function TagApplyDialog({
   const toggle = (dreamId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(dreamId)) next.delete(dreamId);
-      else next.add(dreamId);
+      if (next.has(dreamId)) next.delete(dreamId); else next.add(dreamId);
       return next;
     });
   };
@@ -81,20 +80,27 @@ export function TagApplyDialog({
         </DialogHeader>
         <div className="space-y-3 py-2">
           <p className="text-sm text-muted-foreground">{description}</p>
-          <div className="space-y-1 max-h-60 overflow-y-auto border rounded-md p-2">
-            {matchingDreams.map((dream) => (
+          <div className="space-y-1 max-h-72 overflow-y-auto border rounded-md p-2">
+            {matchingDreams.map((m) => (
               <label
-                key={dream.id}
-                className="flex items-center gap-2 py-1 px-1 rounded hover:bg-accent cursor-pointer"
+                key={m.dream.id}
+                className="flex items-start gap-2 py-1.5 px-1 rounded hover:bg-accent cursor-pointer"
               >
                 <input
                   type="checkbox"
-                  checked={selectedIds.has(dream.id)}
-                  onChange={() => toggle(dream.id)}
-                  className="rounded"
+                  checked={selectedIds.has(m.dream.id)}
+                  onChange={() => toggle(m.dream.id)}
+                  className="rounded mt-0.5 shrink-0"
                 />
-                <span className="text-sm flex-1">{dream.title}</span>
-                <span className="text-xs text-muted-foreground">{dream.dream_date}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-medium truncate">{m.dream.title}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{m.dream.dream_date}</span>
+                  </div>
+                  {m.snippet && (
+                    <SnippetText snippet={m.snippet} term={m.matchedTerm} />
+                  )}
+                </div>
               </label>
             ))}
           </div>
@@ -111,5 +117,32 @@ export function TagApplyDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Snippet renderer ──────────────────────────────────────────────────────────
+
+/**
+ * Renders the snippet with the matched term highlighted.
+ * Splits on the first case-insensitive occurrence to preserve original casing.
+ */
+function SnippetText({ snippet, term }: { snippet: string; term: string }) {
+  const idx = snippet.toLowerCase().indexOf(term.toLowerCase());
+  if (idx === -1) {
+    return <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{snippet}</p>;
+  }
+
+  const before = snippet.slice(0, idx);
+  const match  = snippet.slice(idx, idx + term.length);
+  const after  = snippet.slice(idx + term.length);
+
+  return (
+    <p className="text-xs text-muted-foreground italic mt-0.5 truncate">
+      {before}
+      <mark className="not-italic bg-primary/20 text-foreground rounded-sm px-0.5">
+        {match}
+      </mark>
+      {after}
+    </p>
   );
 }

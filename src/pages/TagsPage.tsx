@@ -18,9 +18,9 @@ import { SplitTagDialog } from '@/components/tags/SplitTagDialog';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
 import { getCategoryColor } from '@/lib/utils';
-import { findMatchingDreams } from '@/lib/tagUtils';
+import { findMatchingDreams, type DreamMatch } from '@/lib/tagUtils';
 import { getTagWordAssociations, deleteWordTagAssociation, getDream, updateDream } from '@/lib/tauri';
-import type { Tag, TagCategory, TagWordUsage, WordTagAssociation, Dream } from '@/lib/tauri';
+import type { Tag, TagCategory, TagWordUsage, WordTagAssociation } from '@/lib/tauri';
 
 const categories: { id: TagCategory; label: string }[] = [
   { id: 'location', label: 'Locations' },
@@ -154,8 +154,9 @@ export function TagsPage() {
   const [loadingAssociations, setLoadingAssociations] = useState(false);
 
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
+  const [applyDialogVariant, setApplyDialogVariant] = useState<'new' | 'updated'>('new');
   const [pendingApplyTag, setPendingApplyTag] = useState<Tag | null>(null);
-  const [matchingDreams, setMatchingDreams] = useState<Dream[]>([]);
+  const [matchingDreams, setMatchingDreams] = useState<DreamMatch[]>([]);
 
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
   const [splittingTag, setSplittingTag] = useState<Tag | null>(null);
@@ -300,11 +301,12 @@ export function TagsPage() {
           if (matches.length > 0) {
             setMatchingDreams(matches);
             setPendingApplyTag(updatedTag);
+            setApplyDialogVariant('updated');
             setApplyDialogOpen(true);
           }
         }
       } else {
-        await createTag({
+        const newTag = await createTag({
           name: name.trim(),
           category,
           color,
@@ -313,6 +315,19 @@ export function TagsPage() {
           emotive_subcategory: category === 'emotive' ? emotiveSubcategory : null,
         });
         setIsEditorOpen(false);
+
+        let currentDreams = dreams;
+        if (currentDreams.length === 0) {
+          await fetchDreams();
+          currentDreams = useDreamStore.getState().dreams;
+        }
+        const matches = findMatchingDreams(newTag, currentDreams);
+        if (matches.length > 0) {
+          setMatchingDreams(matches);
+          setPendingApplyTag(newTag);
+          setApplyDialogVariant('new');
+          setApplyDialogOpen(true);
+        }
       }
     } catch (error) {
       console.error('Failed to save tag:', error);
@@ -676,7 +691,7 @@ export function TagsPage() {
         tag={pendingApplyTag}
         matchingDreams={matchingDreams}
         onApplied={fetchDreams}
-        variant="updated"
+        variant={applyDialogVariant}
       />
 
       <SplitTagDialog

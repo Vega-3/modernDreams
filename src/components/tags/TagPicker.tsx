@@ -7,10 +7,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { TagBadge } from './TagBadge';
 import { TagApplyDialog } from './TagApplyDialog';
 import { cn, getCategoryColor, sortByName } from '@/lib/utils';
-import { findMatchingDreams } from '@/lib/tagUtils';
+import { findMatchingDreams, type DreamMatch } from '@/lib/tagUtils';
 import { useTagStore } from '@/stores/tagStore';
 import { useDreamStore } from '@/stores/dreamStore';
-import type { Tag, TagCategory, Dream } from '@/lib/tauri';
+import type { Tag, TagCategory } from '@/lib/tauri';
 
 interface TagPickerProps {
   selectedTags: Tag[];
@@ -36,7 +36,7 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
 
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [pendingTag, setPendingTag] = useState<Tag | null>(null);
-  const [matchingDreams, setMatchingDreams] = useState<Dream[]>([]);
+  const [matchingDreams, setMatchingDreams] = useState<DreamMatch[]>([]);
 
   const filteredTags = useMemo(() => {
     if (!search) return tags;
@@ -99,7 +99,7 @@ export function TagPicker({ selectedTags, onTagsChange, currentDreamId }: TagPic
       // Exclude the dream currently open in the editor — the tag was just added
       // to it in memory, so prompting to apply it again is redundant.
       const matches = findMatchingDreams(newTag, currentDreams).filter(
-        (d) => d.id !== currentDreamId,
+        (d) => d.dream.id !== currentDreamId,
       );
       if (matches.length > 0) {
         setMatchingDreams(matches);
