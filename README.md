@@ -3,7 +3,7 @@
 A local-first desktop app for dream journaling, depth psychology, and pattern analysis.
 Rich tagging, AI-assisted analysis, graph visualization, and full privacy — your data never leaves your machine.
 
-**[dreams-landing.vercel.app](https://dreams-landing.vercel.app)** · [Download latest release](https://github.com/Vega-3/modernDreams/releases/latest)
+**[ipsacarta.vercel.app](https://ipsacarta.vercel.app)** · [Download latest release](https://github.com/Vega-3/modernDreams/releases/latest)
 
 ---
 
