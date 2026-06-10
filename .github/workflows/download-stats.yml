@@ -1,0 +1,31 @@
+name: Download Stats
+
+# Reports cumulative installer download counts from the GitHub Releases API.
+# This does NOT build the app — it only reads public download_count values and
+# writes a table to the workflow run summary. No app telemetry is involved.
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # every Monday 09:00 UTC
+  workflow_dispatch: {}   # plus an on-demand "Run workflow" button
+
+permissions:
+  contents: read
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report download counts to the run summary
+        env:
+          # github.token lifts the API rate limit from 60 to 5000 req/hr.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Wrap in a fenced code block so the space-aligned table renders intact.
+          {
+            echo '```'
+            python3 scripts/download-stats.py
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
